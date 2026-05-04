@@ -46,7 +46,21 @@ FUNDz supports local operational automation around client updates, DisputeFox ex
 
 The `memory/` folder is the portable handoff record for AI agents.
 
-GitHub should become the durable source of truth once a FUNDz remote is configured and pushed.
+GitHub is the durable source of truth for committed FUNDz handoff memory:
+
+```text
+https://github.com/afundsolution/fundz
+```
+
+## Google Drive Backup
+
+Google Drive stores a human-friendly backup/reference copy of the current memory packet:
+
+```text
+https://docs.google.com/document/d/1LJvMBEzbjSp9ZIuRrrEgVWEFOEu7SOOM4Eh8aP7owC4/edit
+```
+
+If GitHub and the Google Doc disagree, trust GitHub first and update the Drive copy from the repo memory files.
 
 ## Command Layer
 
@@ -54,7 +68,9 @@ GitHub should become the durable source of truth once a FUNDz remote is configur
 
 ## Validation Layer
 
-`scripts/check-memory.sh` validates the required memory files and required `HANDOFF.md` sections. `.github/workflows/memory-check.yml` runs the same check in GitHub Actions on pushes and pull requests after the repo is pushed to GitHub.
+`scripts/check-memory.sh` validates the required memory files and required `HANDOFF.md` sections. `.github/workflows/memory-check.yml` runs the same check in GitHub Actions on pushes and pull requests.
+
+Latest verified state: Memory Check passed on `main` after the handoff-system push.
 
 ## App Logic
 

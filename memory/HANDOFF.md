@@ -6,15 +6,15 @@ Install the portable AI handoff and memory system into the FUNDz repo so Brandon
 
 ## Current Status
 
-The memory scaffold and command shortcuts have been copied into the FUNDz project. Existing FUNDz app logic and current uncommitted work were left untouched.
+The memory scaffold and command shortcuts have been installed in FUNDz, committed, pushed to the private GitHub repository `https://github.com/afundsolution/fundz`, and backed up to Google Drive. Existing FUNDz app logic and current uncommitted work were left untouched.
 
 ## Last Completed Step
 
-Copied and tailored `AGENTS.md`, `memory/`, command scripts, Makefile shortcuts, and the GitHub Actions memory check in FUNDz.
+Created the private GitHub remote, pushed `main`, verified the Memory Check workflow, and created the FUNDz Google Drive backup doc.
 
 ## Next Step
 
-Commit only the new handoff-system files, create/connect a private GitHub remote for FUNDz if needed, and push the handoff setup.
+Use `make start` at the beginning of each FUNDz coding session. Before handoff, update memory files and use `make handoff MSG="Clear commit message"` only when all local changes are ready to commit.
 
 ## Files Changed Recently
 
@@ -38,6 +38,8 @@ Commit only the new handoff-system files, create/connect a private GitHub remote
 - `scripts/check-memory.sh`
 - `scripts/start-session.sh`
 - `scripts/finish-session.sh`
+- GitHub repo: `https://github.com/afundsolution/fundz`
+- Google Doc: `https://docs.google.com/document/d/1LJvMBEzbjSp9ZIuRrrEgVWEFOEu7SOOM4Eh8aP7owC4/edit`
 
 ## Commands / Tests Run
 
@@ -45,16 +47,22 @@ Commit only the new handoff-system files, create/connect a private GitHub remote
 - Checked for existing `AGENTS.md`, `memory/`, command scripts, and Makefile: none were present.
 - Copied the handoff scaffold from `/Users/turbo/Desktop/Save A Token`.
 - Ran `sh scripts/check-memory.sh`: passed.
+- Committed scaffold as `86c9b8e Add AI handoff memory system`.
+- Created private GitHub repo `afundsolution/fundz`.
+- Pushed `main` to `https://github.com/afundsolution/fundz`.
+- Ran `gh run watch 25300657050 --repo afundsolution/fundz --exit-status`: Memory Check workflow passed.
+- Ran `make start`: printed the required reading order and startup prompt.
+- Created Google Doc `FUNDz - AI Handoff Memory Packet`.
+- Read the Google Doc back through the connector and verified the content was present.
 
 ## Open Questions
 
-- Should FUNDz use a new private GitHub repo named `afundsolution/fundz`, or should it connect to a different existing remote?
-- Should the Google Drive backup doc be updated with a FUNDz-specific handoff snapshot after the GitHub remote is connected?
+- Should live Supabase/Postgres memory be added later, or should GitHub plus Google Drive remain the first operating mode?
 
 ## Blockers
 
-- FUNDz does not currently have a Git remote configured.
+- None for the handoff system.
 
 ## Notes for Next AI
 
-Read this file first, then read `memory/CURRENT_STATUS.md` and `memory/NEXT_STEPS.md`. Do not commit unrelated existing FUNDz changes unless Brandon explicitly asks. Before stopping, update the required memory files and run the memory check.
+Read this file first, then read `memory/CURRENT_STATUS.md` and `memory/NEXT_STEPS.md`. Do not commit unrelated existing FUNDz changes unless Brandon explicitly asks. `make handoff` commits all local changes, so use it only when the worktree is ready. Before stopping, update the required memory files and run the memory check.
