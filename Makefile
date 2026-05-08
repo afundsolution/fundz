@@ -1,4 +1,4 @@
-.PHONY: start handoff memory-check command-center daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe inactive test
+.PHONY: start handoff memory-check command-center command-center-domain daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe inactive test
 
 start:
 	sh scripts/start-session.sh
@@ -12,16 +12,19 @@ memory-check:
 command-center:
 	python3 scripts/fundz_command_center.py
 
+command-center-domain:
+	zsh scripts/fundz_command_center_domain_setup.sh
+
 daily-board:
 	python3 scripts/fundz_command_center.py --limit 10
 	@printf '\n'
 	@sed -n '1,20p' data/local/command-center/fundz-daily-board.md
 
 autonomous:
-	FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true python3 scripts/fundz_autonomous_operator.py --once --today "$${TODAY:-$$(date +%F)}" --run-tests
+	FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true FUNDZ_ALLOW_COMMAND_CENTER_DOMAIN_TUNNEL=true python3 scripts/fundz_autonomous_operator.py --once --today "$${TODAY:-$$(date +%F)}" --run-tests
 
 autonomous-watch:
-	FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true python3 scripts/fundz_autonomous_operator.py --watch --today "$${TODAY:-$$(date +%F)}"
+	FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true FUNDZ_ALLOW_COMMAND_CENTER_DOMAIN_TUNNEL=true python3 scripts/fundz_autonomous_operator.py --watch --today "$${TODAY:-$$(date +%F)}"
 
 maintenance-autopilot:
 	python3 scripts/fundz_maintenance_autopilot.py --today "$${TODAY:-$$(date +%F)}" --run-tests

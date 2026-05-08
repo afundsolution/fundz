@@ -184,6 +184,77 @@ class FundzAutonomousOperatorTests(unittest.TestCase):
         self.assertTrue(runtime["fallback_launchagent_allowed"])
         self.assertEqual(runtime["active_processes"], [])
 
+    def test_explicit_command_center_domain_allow_keeps_runtime_quiet(self) -> None:
+        def fake_quick_check(command: list[str]) -> dict:
+            joined = " ".join(command)
+            if "screen -ls" in joined:
+                return {
+                    "ok": True,
+                    "stdout": (
+                        "\t123.fundz-command-center\t(Detached)\n"
+                        "\t456.fundz-tunnel\t(Detached)\n"
+                    ),
+                    "stderr": "",
+                }
+            if "ps -axo" in joined:
+                return {
+                    "ok": True,
+                    "stdout": (
+                        "123 python3 scripts/fundz_command_center_server.py --host 127.0.0.1 --port 8797\n"
+                        "456 /opt/homebrew/bin/cloudflared tunnel --config /Users/turbo/.cloudflared/fundz-command-center.yml run fundz-credit-tracker\n"
+                    ),
+                    "stderr": "",
+                }
+            if "launchctl print-disabled" in joined:
+                return {
+                    "ok": True,
+                    "stdout": '"com.afundsolution.fundz-imessage-fallback" => disabled\n',
+                    "stderr": "",
+                }
+            return {"ok": True, "stdout": "", "stderr": ""}
+
+        with (
+            mock.patch.dict(os.environ, {operator.ALLOW_COMMAND_CENTER_DOMAIN_ENV: "true"}),
+            mock.patch.object(operator, "quick_check", side_effect=fake_quick_check),
+        ):
+            runtime = operator.runtime_check()
+
+        self.assertTrue(runtime["quiet"])
+        self.assertTrue(runtime["command_center_domain_tunnel_allowed"])
+        self.assertEqual(runtime["active_screens"], [])
+        self.assertEqual(runtime["active_processes"], [])
+
+    def test_command_center_domain_tunnel_is_unsafe_without_allow(self) -> None:
+        def fake_quick_check(command: list[str]) -> dict:
+            joined = " ".join(command)
+            if "screen -ls" in joined:
+                return {"ok": True, "stdout": "\t456.fundz-tunnel\t(Detached)\n", "stderr": ""}
+            if "ps -axo" in joined:
+                return {
+                    "ok": True,
+                    "stdout": (
+                        "456 /opt/homebrew/bin/cloudflared tunnel --config /Users/turbo/.cloudflared/fundz-command-center.yml run fundz-credit-tracker\n"
+                    ),
+                    "stderr": "",
+                }
+            if "launchctl print-disabled" in joined:
+                return {
+                    "ok": True,
+                    "stdout": '"com.afundsolution.fundz-imessage-fallback" => disabled\n',
+                    "stderr": "",
+                }
+            return {"ok": True, "stdout": "", "stderr": ""}
+
+        with (
+            mock.patch.dict(os.environ, {operator.ALLOW_COMMAND_CENTER_DOMAIN_ENV: ""}, clear=False),
+            mock.patch.object(operator, "quick_check", side_effect=fake_quick_check),
+        ):
+            runtime = operator.runtime_check()
+
+        self.assertFalse(runtime["quiet"])
+        self.assertEqual(runtime["active_screens"], ["fundz-tunnel"])
+        self.assertEqual(len(runtime["active_processes"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

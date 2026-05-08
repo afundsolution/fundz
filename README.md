@@ -138,6 +138,14 @@ It writes local, Git-ignored operator outputs:
 
 Use this before expanding outreach. It shows today's top actions, owner-review clients, no-recent-contact exceptions, next safe batch candidates, pilot status, AutoFox failure/duplicate/after-hours counts, memory freshness, what changed since the last run, and the current Cloudflare/HighLevel/Credit Tracker blockers. The send visibility view shows what FUNDz has sent or attempted from local receipts/audits, the exact next queued message bodies from the current preview packet, and whether the required owner text notice has been sent at least two minutes before live send. The send kill switch blocks live client/lead sends, HighLevel live replies, DF/AutoFox campaign assignment sends, and webhook-driven client responses when `data/local/command-center/fundz-send-kill-switch.json` has `"enabled": true`. The owner decision outputs convert owner-review clients into approval choices such as billing review, import/round confirmation, onboarding follow-up, approve draft, or hold messaging. The missing-steps recheck keeps the remaining live proof, external permissions, CI, and rollout gaps visible after each refresh.
 
+To put the Command Center on its protected domain, run:
+
+```sh
+make command-center-domain
+```
+
+This starts a local protected Command Center web server on `127.0.0.1:8797`, creates or reuses `fundz-command.afundsolution.com`, and routes it through the existing Cloudflare named tunnel. The owner URL and private token are written only to `data/local/command-center/fundz-command-center-domain.json`, which is ignored by Git. The public `/health` path is open; every dashboard page requires the owner token. `make autonomous` explicitly allows this protected Command Center server/tunnel while continuing to flag the live bridge, HighLevel poller, client sends, campaign assignments, and webhook/client-reply runtime as gated.
+
 ## Build The ScoreFusion Billing Dashboard
 
 ScoreFusion billing reporting uses Google Drive as the shared communication layer between DisputeFox, HighLevel, FUNDz, and manual review.
@@ -422,7 +430,7 @@ This refreshes the daily board, maintenance cleanup, intake governor, phone-app 
 - `data/local/autonomy/fundz-autonomous-operator-status.json`
 - `data/local/autonomy/fundz-autonomous-operator.jsonl`
 
-It does not start the bridge, tunnel, HighLevel poller, browser workflows, campaign assignments, or client sends. Per Brandon's May 8 wake request, `make autonomous` allows the owner-command iMessage fallback LaunchAgent to be enabled without treating that as an unsafe finding. To run the operator as a watcher, set `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` locally and use:
+It does not start the bridge, HighLevel poller, browser workflows, campaign assignments, or client sends. Per Brandon's May 8 wake request, `make autonomous` allows the owner-command iMessage fallback LaunchAgent and the protected Command Center domain server/tunnel to be enabled without treating those as unsafe findings. The client-facing bridge, live HighLevel replies, DF/AutoFox edits, webhook wiring, and sends remain gated. To run the operator as a watcher, set `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` locally and use:
 
 ```sh
 make autonomous-watch
@@ -520,16 +528,23 @@ The quick Cloudflare URL is good for testing, but production should use a named 
 cloudflared tunnel login
 ```
 
-2. Optional: set a stable hostname in `.env.local`:
+2. Optional: set stable hostnames in `.env.local`:
 
 ```text
 FUNDZ_TUNNEL_HOSTNAME=fundz.yourdomain.com
+FUNDZ_COMMAND_CENTER_HOSTNAME=fundz-command.yourdomain.com
 ```
 
-3. Create/start the named tunnel:
+3. Create/start the named tunnel for the Credit Tracker webhook:
 
 ```sh
 scripts/fundz_named_tunnel_setup.sh
+```
+
+Or create/start the protected Command Center domain plus the webhook ingress on the same named tunnel:
+
+```sh
+make command-center-domain
 ```
 
 If `FUNDZ_TUNNEL_HOSTNAME` is set, the Credit Tracker webhook becomes:

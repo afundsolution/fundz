@@ -33,12 +33,15 @@ PHONE_APP_INTAKE_JSON = ROOT / "data" / "local" / "command-center" / "fundz-phon
 
 FALLBACK_LABEL = "com.afundsolution.fundz-imessage-fallback"
 ALLOW_FALLBACK_ENV = "FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT"
-WATCHED_SCREEN_NAMES = ("fundz-bridge", "fundz-tunnel", "fundz-highlevel-poller")
+ALLOW_COMMAND_CENTER_DOMAIN_ENV = "FUNDZ_ALLOW_COMMAND_CENTER_DOMAIN_TUNNEL"
+COMMAND_CENTER_DOMAIN_SCREENS = {"fundz-command-center", "fundz-tunnel"}
+WATCHED_SCREEN_NAMES = ("fundz-bridge", "fundz-tunnel", "fundz-command-center", "fundz-highlevel-poller")
 WATCHED_PROCESS_MARKERS = (
     "scripts/fundz_credit_tracker_bridge.py",
-    "cloudflared tunnel run fundz-credit-tracker",
+    "cloudflared",
     "scripts/fundz_highlevel_inbox_poller.py --daemon",
     "scripts/fundz_imessage_fallback.py",
+    "scripts/fundz_command_center_server.py",
 )
 
 SAFE_CHILD_ENV = {
@@ -193,7 +196,13 @@ def quick_check(command: list[str], timeout: int = 6) -> dict[str, Any]:
 def runtime_check() -> dict[str, Any]:
     screen = quick_check(["screen", "-ls"])
     screen_output = f"{screen.get('stdout', '')}\n{screen.get('stderr', '')}"
-    active_screens = [name for name in WATCHED_SCREEN_NAMES if name in screen_output]
+    command_center_domain_allowed = os.getenv(ALLOW_COMMAND_CENTER_DOMAIN_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+    raw_active_screens = [name for name in WATCHED_SCREEN_NAMES if name in screen_output]
+    active_screens = [
+        name
+        for name in raw_active_screens
+        if not (command_center_domain_allowed and name in COMMAND_CENTER_DOMAIN_SCREENS)
+    ]
 
     fallback_allowed = os.getenv(ALLOW_FALLBACK_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
     process_markers = [
@@ -206,6 +215,7 @@ def runtime_check() -> dict[str, Any]:
         for line in process_lines
         if any(marker in line for marker in process_markers)
         and "fundz_autonomous_operator.py" not in line
+        and not is_allowed_command_center_domain_process(line, command_center_domain_allowed)
     ]
 
     launchctl = quick_check(["launchctl", "print-disabled", f"gui/{os.getuid()}"])
@@ -218,8 +228,17 @@ def runtime_check() -> dict[str, Any]:
         "active_processes": active_processes[:10],
         "fallback_launchagent_disabled": fallback_disabled,
         "fallback_launchagent_allowed": fallback_allowed,
+        "command_center_domain_tunnel_allowed": command_center_domain_allowed,
         "launchctl_checked": launchctl.get("ok"),
     }
+
+
+def is_allowed_command_center_domain_process(line: str, allowed: bool) -> bool:
+    if not allowed:
+        return False
+    if "scripts/fundz_command_center_server.py" in line:
+        return True
+    return "cloudflared" in line and "fundz-command-center.yml" in line and "fundz-credit-tracker" in line
 
 
 def safety_findings(maintenance: dict[str, Any], runtime: dict[str, Any]) -> list[str]:
