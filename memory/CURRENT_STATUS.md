@@ -12,7 +12,7 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 - `make autonomous-watch` exists, but it only runs if `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` is set locally.
 - Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly to run the safe operator from this workspace.
 - Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
-- PR #1 is open at `https://github.com/afundsolution/fundz/pull/1`; branch protection now requires both `memory-check` and `python-tests`.
+- PR #1 was merged at `https://github.com/afundsolution/fundz/pull/1`; branch protection now requires both `memory-check` and `python-tests`.
 - HighLevel inbox preview access is working again in dry-run/preview mode; latest check returned status 200, fetched 5, handled 2, and sent 0.
 - No local Postgres URL is configured; Supabase dashboard SQL chunks are generated under `data/local/supabase-dashboard-sync` when memory sync is needed.
 - `make inactive` is available and was run on May 7, 2026 at 10:37:44 CDT.
@@ -41,6 +41,7 @@ Safe local autonomy / sleep mode. Continue local board, intake, maintenance, pro
 - Ran `TODAY=2026-05-08 make autonomous`: passed 6/6 operator steps with no safety findings. Maintenance autopilot passed 7/7 including tests. Runtime remained quiet with the fallback LaunchAgent disabled.
 - Created PR #1 and required `python-tests` in branch protection alongside `memory-check`.
 - Fixed CI-only pilot SMS payload template behavior and verified a clean-env test run passed 183 tests.
+- Merged PR #1 after both GitHub checks passed and synced local `main`.
 - Created hourly Codex automation `fundz-safe-autonomous-operator`.
 - Added `FUNDZ_SLEEP_MODE.md`, a friendly inactive status page and wake checklist.
 - Added `scripts/fundz_inactive.sh` and `make inactive` to repeatably stop the local runtime pieces.
