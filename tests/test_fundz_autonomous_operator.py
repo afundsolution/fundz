@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -157,6 +158,31 @@ class FundzAutonomousOperatorTests(unittest.TestCase):
 
         self.assertFalse(status["ok"])
         self.assertTrue(any(finding.startswith("Unsafe:") for finding in status["safety_findings"]))
+
+    def test_explicit_fallback_launchagent_allow_keeps_runtime_quiet(self) -> None:
+        def fake_quick_check(command: list[str]) -> dict:
+            joined = " ".join(command)
+            if "screen -ls" in joined:
+                return {"ok": False, "stdout": "", "stderr": "No Sockets found"}
+            if "ps -axo" in joined:
+                return {"ok": True, "stdout": "123 python3 scripts/fundz_imessage_fallback.py --live\n", "stderr": ""}
+            if "launchctl print-disabled" in joined:
+                return {
+                    "ok": True,
+                    "stdout": '"com.afundsolution.fundz-imessage-fallback" => enabled\n',
+                    "stderr": "",
+                }
+            return {"ok": True, "stdout": "", "stderr": ""}
+
+        with (
+            mock.patch.dict(os.environ, {operator.ALLOW_FALLBACK_ENV: "true"}),
+            mock.patch.object(operator, "quick_check", side_effect=fake_quick_check),
+        ):
+            runtime = operator.runtime_check()
+
+        self.assertTrue(runtime["quiet"])
+        self.assertTrue(runtime["fallback_launchagent_allowed"])
+        self.assertEqual(runtime["active_processes"], [])
 
 
 if __name__ == "__main__":

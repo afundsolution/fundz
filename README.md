@@ -3,10 +3,12 @@
 ## Status: Safe Local Autonomy / Sleep Mode
 
 FUNDz is currently parked from live client operations: fun, locally autonomous,
-inactive for sends, and not sending. Start with `FUNDZ_SLEEP_MODE.md` before
-doing any operational work. Use `make autonomous` for safe local board/intake/
-maintenance refreshes, and use `make inactive` to stop the local bridge, tunnel,
-poller, and iMessage fallback when this folder needs to stay asleep.
+inactive for client sends, and not sending clients. Brandon explicitly woke the
+local autonomous-operator and iMessage fallback LaunchAgents on May 8, 2026.
+Start with `FUNDZ_SLEEP_MODE.md` before doing any operational work. Use
+`make autonomous` for safe local board/intake/maintenance refreshes, and use
+`make inactive` to stop the local bridge, tunnel, poller, and iMessage fallback
+when this folder needs to fully sleep again.
 
 FUNDz is set up as a hybrid project:
 
@@ -410,7 +412,7 @@ This refreshes the daily board, maintenance cleanup, intake governor, phone-app 
 - `data/local/autonomy/fundz-autonomous-operator-status.json`
 - `data/local/autonomy/fundz-autonomous-operator.jsonl`
 
-It does not start the bridge, tunnel, HighLevel poller, iMessage fallback, browser workflows, campaign assignments, or client sends. To run it as a watcher, set `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` locally and use:
+It does not start the bridge, tunnel, HighLevel poller, browser workflows, campaign assignments, or client sends. Per Brandon's May 8 wake request, `make autonomous` allows the owner-command iMessage fallback LaunchAgent to be enabled without treating that as an unsafe finding. To run the operator as a watcher, set `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` locally and use:
 
 ```sh
 make autonomous-watch

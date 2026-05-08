@@ -2,6 +2,18 @@
 
 ## 2026-05-08
 
+### LaunchAgent Wake
+
+- Recreated `~/Library/LaunchAgents/com.afundsolution.fundz-autonomous-operator.plist` after Brandon explicitly requested both FUNDz LaunchAgents enabled.
+- Enabled `com.afundsolution.fundz-autonomous-operator` and `com.afundsolution.fundz-imessage-fallback`; `launchctl print-disabled` now reports both enabled.
+- The autonomous LaunchAgent runs hourly with dry-run/no-live-send environment settings and `FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true`.
+- The iMessage fallback LaunchAgent runs every 30 seconds in live owner-command mode.
+- Updated `scripts/fundz_autonomous_operator.py` and `Makefile` so an explicitly allowed iMessage fallback LaunchAgent does not create a false unsafe finding, while live sends, client edits, campaign assignments, and webhook wiring remain gated.
+- Added test coverage for the explicit fallback LaunchAgent allow setting.
+- Verified `make autonomous`: passed 6/6 operator steps with no safety findings and maintenance autopilot 7/7.
+- Verified `python3 -m unittest tests.test_fundz_autonomous_operator -q`: passed 4 tests.
+- Verified `make test`: passed 184 tests.
+
 ### Safe Local Autonomy
 
 - Added `scripts/fundz_autonomous_operator.py` as the single safe autonomy entrypoint.

@@ -11,14 +11,15 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 - `make autonomous` runs the safe local autonomous operator once. It refreshes the autonomy review, maintenance autopilot, intake governor, intake dashboard, phone-app intake, command center, and tests while forcing child settings to dry-run/no-live-send mode.
 - `make autonomous-watch` exists, but it only runs if `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` is set locally.
 - Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly to run the safe operator from this workspace.
+- Brandon explicitly requested both local LaunchAgents enabled. `com.afundsolution.fundz-autonomous-operator` is enabled and runs hourly with dry-run/no-live-send settings. `com.afundsolution.fundz-imessage-fallback` is enabled and runs every 30 seconds in live owner-command mode.
 - Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
-- Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:02 CDT; OK; approval required; live sends disabled).
+- Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:23 CDT; OK; approval required; live sends disabled).
 - PR #1 was merged at `https://github.com/afundsolution/fundz/pull/1`; branch protection now requires both `memory-check` and `python-tests`.
 - HighLevel inbox preview access is working again in dry-run/preview mode; latest check returned status 200, fetched 5, handled 2, and sent 0.
 - No local Postgres URL is configured; Supabase dashboard SQL chunks are generated under `data/local/supabase-dashboard-sync` when memory sync is needed.
 - `make inactive` is available and was run on May 7, 2026 at 10:37:44 CDT.
 - The inactive run stopped `fundz-bridge` and `fundz-tunnel`, found `fundz-highlevel-poller` already stopped, disabled the `com.afundsolution.fundz-imessage-fallback` LaunchAgent, and wrote `data/local/command-center/fundz-inactive-receipt.md`.
-- Verification after the May 8 autonomy pass and fresh `make inactive`: no `screen` sessions remain, the iMessage fallback LaunchAgent is disabled, and no matching bridge/tunnel/poller/fallback processes are running.
+- Verification after the May 8 LaunchAgent wake: `make autonomous` passed with no safety findings, `launchctl print-disabled` shows both FUNDz LaunchAgents enabled, and both LaunchAgents report last exit code `0`.
 - The portable AI handoff scaffold has been added to the FUNDz repo.
 - `AGENTS.md` now tells agents how to start, work safely, and hand off.
 - `memory/` contains the durable context packet for future agents.
@@ -31,7 +32,7 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 
 ## Active Workstream
 
-Safe local autonomy / sleep mode. Continue local board, intake, maintenance, proposal, and test refreshes through `make autonomous`. Do not continue live-pilot operations, client outreach, webhook work, DF/AutoFox edits, browser actions, or owner-command loops unless Brandon gives exact action-time approval for the specific live step.
+Safe local autonomy with owner-command fallback awake. Continue local board, intake, maintenance, proposal, and test refreshes through `make autonomous`. Do not continue live-pilot operations, client outreach, webhook work, DF/AutoFox edits, browser actions, or non-owner-command live loops unless Brandon gives exact action-time approval for the specific live step.
 
 ## Recently Completed
 

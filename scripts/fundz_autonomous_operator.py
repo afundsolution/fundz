@@ -32,6 +32,7 @@ INTAKE_GOVERNOR_JSON = ROOT / "data" / "local" / "command-center" / "fundz-intak
 PHONE_APP_INTAKE_JSON = ROOT / "data" / "local" / "command-center" / "fundz-phone-app-intake.json"
 
 FALLBACK_LABEL = "com.afundsolution.fundz-imessage-fallback"
+ALLOW_FALLBACK_ENV = "FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT"
 WATCHED_SCREEN_NAMES = ("fundz-bridge", "fundz-tunnel", "fundz-highlevel-poller")
 WATCHED_PROCESS_MARKERS = (
     "scripts/fundz_credit_tracker_bridge.py",
@@ -194,24 +195,29 @@ def runtime_check() -> dict[str, Any]:
     screen_output = f"{screen.get('stdout', '')}\n{screen.get('stderr', '')}"
     active_screens = [name for name in WATCHED_SCREEN_NAMES if name in screen_output]
 
+    fallback_allowed = os.getenv(ALLOW_FALLBACK_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+    process_markers = [
+        marker for marker in WATCHED_PROCESS_MARKERS if not fallback_allowed or marker != "scripts/fundz_imessage_fallback.py"
+    ]
     ps = quick_check(["ps", "-axo", "pid=,command="])
     process_lines = str(ps.get("stdout") or "").splitlines()
     active_processes = [
         line.strip()
         for line in process_lines
-        if any(marker in line for marker in WATCHED_PROCESS_MARKERS)
+        if any(marker in line for marker in process_markers)
         and "fundz_autonomous_operator.py" not in line
     ]
 
     launchctl = quick_check(["launchctl", "print-disabled", f"gui/{os.getuid()}"])
     launchctl_output = f"{launchctl.get('stdout', '')}\n{launchctl.get('stderr', '')}"
     fallback_disabled = f'"{FALLBACK_LABEL}" => disabled' in launchctl_output or f"{FALLBACK_LABEL} => disabled" in launchctl_output
-    fallback_state_ok = not launchctl.get("ok") or fallback_disabled
+    fallback_state_ok = not launchctl.get("ok") or fallback_disabled or fallback_allowed
     return {
         "quiet": not active_screens and not active_processes and fallback_state_ok,
         "active_screens": active_screens,
         "active_processes": active_processes[:10],
         "fallback_launchagent_disabled": fallback_disabled,
+        "fallback_launchagent_allowed": fallback_allowed,
         "launchctl_checked": launchctl.get("ok"),
     }
 
@@ -227,7 +233,11 @@ def safety_findings(maintenance: dict[str, Any], runtime: dict[str, Any]) -> lis
         findings.append(f"Unsafe: live FUNDz screen session(s) are running: {', '.join(runtime['active_screens'])}.")
     if runtime.get("active_processes"):
         findings.append("Unsafe: live FUNDz runtime process(es) appear to be running.")
-    if runtime.get("launchctl_checked") and runtime.get("fallback_launchagent_disabled") is not True:
+    if (
+        runtime.get("launchctl_checked")
+        and runtime.get("fallback_launchagent_disabled") is not True
+        and runtime.get("fallback_launchagent_allowed") is not True
+    ):
         findings.append("Unsafe: FUNDz iMessage fallback LaunchAgent is enabled.")
     if not rollout:
         findings.append("Review: maintenance rollout packet was not found.")
