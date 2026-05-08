@@ -27,6 +27,16 @@ KILL_SWITCH_MD = OUTPUT_DIR / "fundz-send-kill-switch.md"
 NEXT_SEND_QUEUE_CSV = OUTPUT_DIR / "fundz-next-send-queue.csv"
 WORK_QUEUE_CSV = OUTPUT_DIR / "fundz-work-queue.csv"
 COMMAND_CENTER_JSON = OUTPUT_DIR / "fundz-command-center.json"
+OWNER_REVIEW_ACTIONS_JSON = OUTPUT_DIR / "fundz-owner-review-dashboard-actions.json"
+OWNER_REVIEW_ACTIONS_JSONL = OUTPUT_DIR / "fundz-owner-review-dashboard-actions.jsonl"
+
+OWNER_REVIEW_STATUSES = {"Needs Brandon", "Hold", "Proof Needed"}
+OWNER_REVIEW_ACTION_LABELS = {
+    "keep_hold": "Keep on hold",
+    "needs_proof": "Needs proof",
+    "fixed_locally": "Problem fixed locally",
+    "needs_brandon": "Needs Brandon decision",
+}
 
 SAFE_FILES = {
     "command-center": COMMAND_CENTER_MD,
@@ -131,6 +141,79 @@ def auth_link(slug: str, token: str) -> str:
     return f"/files/{quote(slug)}?token={quote(token)}"
 
 
+def work_order_id(row: dict[str, Any]) -> str:
+    for key in ("work_order_id", "client_key", "client_name"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value
+    return "unknown-work-order"
+
+
+def priority_score(row: dict[str, Any]) -> int:
+    try:
+        return int(row.get("priority_score") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def owner_review_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = report.get("work_queue") if isinstance(report.get("work_queue"), list) else []
+    review_rows = [
+        row
+        for row in rows
+        if isinstance(row, dict) and str(row.get("queue_status") or "").strip() in OWNER_REVIEW_STATUSES
+    ]
+    status_rank = {"Needs Brandon": 0, "Hold": 1, "Proof Needed": 2}
+    return sorted(
+        review_rows,
+        key=lambda row: (
+            status_rank.get(str(row.get("queue_status") or ""), 9),
+            -priority_score(row),
+            str(row.get("client_name") or ""),
+        ),
+    )
+
+
+def load_owner_review_actions() -> dict[str, dict[str, Any]]:
+    data = read_json(OWNER_REVIEW_ACTIONS_JSON)
+    actions = data.get("items") if isinstance(data.get("items"), dict) else {}
+    return {str(key): value for key, value in actions.items() if isinstance(value, dict)}
+
+
+def save_owner_review_action(payload: dict[str, Any]) -> dict[str, Any]:
+    report = read_json(COMMAND_CENTER_JSON)
+    rows_by_id = {work_order_id(row): row for row in owner_review_rows(report)}
+    requested_id = str(payload.get("work_order_id") or "").strip()
+    if requested_id not in rows_by_id:
+        raise ValueError("This queue item is not in the current Brandon review list.")
+    action = str(payload.get("action") or "").strip()
+    if action not in OWNER_REVIEW_ACTION_LABELS:
+        raise ValueError("Choose a valid local review action.")
+    note = str(payload.get("note") or "").strip()[:800]
+    row = rows_by_id[requested_id]
+    saved = {
+        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "work_order_id": requested_id,
+        "client_name": str(row.get("client_name") or ""),
+        "queue_status": str(row.get("queue_status") or ""),
+        "action": action,
+        "action_label": OWNER_REVIEW_ACTION_LABELS[action],
+        "note": note,
+        "source": "fundz_command_center_dashboard",
+        "local_only": True,
+        "no_live_send": True,
+        "no_external_edit": True,
+    }
+    current = read_json(OWNER_REVIEW_ACTIONS_JSON)
+    items = current.get("items") if isinstance(current.get("items"), dict) else {}
+    items[requested_id] = saved
+    write_json(OWNER_REVIEW_ACTIONS_JSON, {"updated_at": saved["saved_at"], "items": items})
+    OWNER_REVIEW_ACTIONS_JSONL.parent.mkdir(parents=True, exist_ok=True)
+    with OWNER_REVIEW_ACTIONS_JSONL.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(saved, sort_keys=True) + "\n")
+    return saved
+
+
 def display_text(value: Any, fallback: str = "Not set") -> str:
     text = str(value or "").replace("_", " ").strip()
     return text if text else fallback
@@ -145,13 +228,17 @@ def status_key(value: Any) -> str:
     return "info"
 
 
-def render_metric(label: str, value: Any, note: str = "") -> str:
+def render_metric(label: str, value: Any, note: str = "", *, review_button: bool = False) -> str:
+    tag = "a" if review_button else "div"
+    attrs = " href='#owner-review-panel' role='button' data-open-owner-review aria-haspopup='dialog'" if review_button else ""
+    hint = "<em>Open review panel</em>" if review_button else ""
     return (
-        "<div class='metric'>"
+        f"<{tag} class='metric{' metric-button' if review_button else ''}'{attrs}>"
         f"<span>{html.escape(label)}</span>"
         f"<strong>{html.escape(str(value))}</strong>"
         f"<small>{html.escape(note)}</small>"
-        "</div>"
+        f"{hint}"
+        f"</{tag}>"
     )
 
 
@@ -229,6 +316,106 @@ def render_send_queue(send_queue: list[dict[str, Any]]) -> str:
     return f"<div class='queue-list'>{''.join(items)}</div>"
 
 
+def render_owner_review_panel(rows: list[dict[str, Any]], actions: dict[str, dict[str, Any]]) -> str:
+    count = len(rows)
+    if rows:
+        cards = []
+        action_options = "".join(
+            f"<option value='{html.escape(value, quote=True)}'>{html.escape(label)}</option>"
+            for value, label in OWNER_REVIEW_ACTION_LABELS.items()
+        )
+        for index, row in enumerate(rows, start=1):
+            row_id = work_order_id(row)
+            saved = actions.get(row_id, {})
+            saved_text = (
+                f"Last saved: {display_text(saved.get('action_label'))}"
+                if saved
+                else "No local decision saved yet."
+            )
+            cards.append(
+                "<article class='review-card'>"
+                "<div class='review-head'>"
+                f"<span class='rank'>#{index}</span>"
+                f"<strong>{html.escape(display_text(row.get('client_name'), 'Client'))}</strong>"
+                f"<span class='pill {status_key(row.get('queue_status'))}'>{html.escape(display_text(row.get('queue_status')))}</span>"
+                "</div>"
+                "<dl class='review-details'>"
+                f"<div><dt>Lane</dt><dd>{html.escape(display_text(row.get('lane')))}</dd></div>"
+                f"<div><dt>Due</dt><dd>{html.escape(display_text(row.get('due_date')))}</dd></div>"
+                f"<div><dt>Why held</dt><dd>{html.escape(display_text(row.get('do_not_send_because'), 'Review required before outreach.'))}</dd></div>"
+                f"<div><dt>Next step</dt><dd>{html.escape(display_text(row.get('next_step')))}</dd></div>"
+                f"<div><dt>Proof needed</dt><dd>{html.escape(display_text(row.get('proof_required')))}</dd></div>"
+                f"<div><dt>Evidence</dt><dd>{html.escape(display_text(row.get('evidence')))}</dd></div>"
+                "</dl>"
+                "<form class='review-form'>"
+                f"<input type='hidden' name='work_order_id' value='{html.escape(row_id, quote=True)}'>"
+                "<label>Decision"
+                f"<select name='action'>{action_options}</select>"
+                "</label>"
+                "<label>Note"
+                "<textarea name='note' rows='2' placeholder='What did you fix or decide?'></textarea>"
+                "</label>"
+                "<button type='submit'>Save Local Fix</button>"
+                f"<span class='save-state'>{html.escape(saved_text)}</span>"
+                "</form>"
+                "</article>"
+            )
+        body = "".join(cards)
+    else:
+        body = "<p class='empty'>Nothing needs Brandon review right now.</p>"
+    return f"""
+<section id="owner-review-panel" class="review-panel" aria-label="Needs Brandon review panel">
+  <div class="review-dialog" role="dialog" aria-modal="true">
+    <div class="dialog-top">
+    <div>
+      <h2>Needs Brandon Review</h2>
+      <p>{count} queue item(s) need Brandon/hold review. These fixes are local notes only; nothing sends and no external system changes.</p>
+    </div>
+    <a class="dialog-close" href="#">Close</a>
+    </div>
+    <div class="review-list">{body}</div>
+  </div>
+</section>
+"""
+
+
+def render_owner_review_script() -> str:
+    return """
+<script>
+(() => {
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+  for (const form of document.querySelectorAll(".review-form")) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const state = form.querySelector(".save-state");
+      const data = new FormData(form);
+      const payload = {
+        work_order_id: data.get("work_order_id"),
+        action: data.get("action"),
+        note: data.get("note"),
+      };
+      if (state) state.textContent = "Saving...";
+      try {
+        const response = await fetch(`/review-action?token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "Could not save local review.");
+        }
+        if (state) state.textContent = `Saved: ${result.action_label}`;
+      } catch (error) {
+        if (state) state.textContent = error.message || "Could not save local review.";
+      }
+    });
+  }
+})();
+</script>
+"""
+
+
 def render_links(token: str) -> str:
     return "".join(
         f"<a href='{auth_link(slug, token)}'>{html.escape(label)}</a>"
@@ -249,21 +436,22 @@ def render_home(token: str) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     send_queue = report.get("next_send_queue") if isinstance(report.get("next_send_queue"), list) else []
     kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
+    review_rows = owner_review_rows(report)
+    review_actions = load_owner_review_actions()
     queue_status = {}
     for row in report.get("work_queue", []) if isinstance(report.get("work_queue"), list) else []:
         status = str(row.get("queue_status") or "Unknown")
         queue_status[status] = queue_status.get(status, 0) + 1
     allowed_now = sum(1 for row in send_queue if str(row.get("send_allowed_now") or "").lower() == "yes")
-    needs_attention = queue_status.get("Needs Brandon", 0) + queue_status.get("Hold", 0) + queue_status.get("Proof Needed", 0)
     cards = [
-        ("Live Sends", "Off", "client-facing work is inactive"),
-        ("Active Clients", summary.get("active_clients", 0), "tracked locally"),
-        ("Needs Attention", needs_attention, "hold, proof, or Brandon"),
-        ("Next Messages", len(send_queue), f"{allowed_now} allowed now"),
-        ("Work Queue", sum(queue_status.values()), "local rows"),
-        ("Kill Switch", display_text(kill_switch.get("status"), "gated"), "local control"),
+        ("Live Sends", "Off", "client-facing work is inactive", False),
+        ("Active Clients", summary.get("active_clients", 0), "tracked locally", False),
+        ("Needs Brandon", len(review_rows), "click to review/fix", True),
+        ("Next Messages", len(send_queue), f"{allowed_now} allowed now", False),
+        ("Work Queue", sum(queue_status.values()), "local rows", False),
+        ("Kill Switch", display_text(kill_switch.get("status"), "gated"), "local control", False),
     ]
-    card_html = "".join(render_metric(*card) for card in cards)
+    card_html = "".join(render_metric(label, value, note, review_button=review_button) for label, value, note, review_button in cards)
     chips = "".join(
         (
             render_chip("Mode", "Inactive", "good"),
@@ -276,6 +464,8 @@ def render_home(token: str) -> str:
     daily = render_daily_board(report)
     top_actions = render_top_actions(report)
     queue = render_send_queue(send_queue)
+    owner_review_panel = render_owner_review_panel(review_rows, review_actions)
+    owner_review_script = render_owner_review_script()
     generated = html.escape(str(report.get("generated_at") or "not generated"))
     return f"""<!doctype html>
 <html lang="en">
@@ -308,6 +498,9 @@ def render_home(token: str) -> str:
     .metric span {{ display:block; color:var(--muted); font-size:13px; }}
     .metric strong {{ display:block; margin-top:8px; font-size:22px; word-break:break-word; }}
     .metric small {{ display:block; margin-top:6px; color:var(--muted); }}
+    .metric em {{ display:block; margin-top:8px; color:var(--sky-ink); font-style:normal; font-weight:700; font-size:13px; }}
+    .metric-button {{ cursor:pointer; text-align:left; font:inherit; color:inherit; text-decoration:none; display:block; }}
+    .metric-button:hover,.metric-button:focus {{ border-color:#8cc7ee; box-shadow:0 0 0 3px rgba(14,116,144,.12); outline:0; }}
     .grid {{ display:grid; grid-template-columns:1.1fr .9fr; gap:16px; align-items:start; }}
     section {{ border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:16px; }}
     .brief-list {{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }}
@@ -326,7 +519,28 @@ def render_home(token: str) -> str:
     .data-table {{ width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed; }}
     th,td {{ border-bottom:1px solid var(--line); text-align:left; padding:9px 8px; vertical-align:top; overflow-wrap:anywhere; }}
     th {{ color:var(--muted); font-weight:600; }}
+    .review-panel {{ display:none; position:fixed; inset:0; z-index:40; overflow:auto; padding:22px; background:rgba(15,32,39,.42); }}
+    .review-panel:target {{ display:block; }}
+    .review-dialog {{ width:min(980px,calc(100vw - 28px)); margin:0 auto; border:1px solid var(--line); border-radius:8px; padding:0; color:var(--ink); background:#fff; box-shadow:0 20px 80px rgba(15,32,39,.28); }}
+    .dialog-top {{ position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:16px; padding:16px; z-index:1; }}
+    .dialog-top h2 {{ margin-bottom:4px; }}
+    .dialog-top p {{ margin:0; color:var(--muted); }}
+    .dialog-close,.review-form button {{ border:1px solid var(--line); border-radius:6px; background:#fff; color:#0f4f77; padding:8px 10px; font-weight:700; cursor:pointer; }}
+    .review-list {{ display:grid; gap:12px; padding:16px; background:var(--wash); }}
+    .review-card {{ border:1px solid var(--line); border-radius:8px; background:#fff; padding:14px; }}
+    .review-head {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }}
+    .review-head strong {{ font-size:16px; }}
+    .review-details {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; margin:0 0 12px; }}
+    .review-details div {{ border-bottom:1px solid var(--line); padding-bottom:8px; }}
+    .review-details dt {{ color:var(--muted); font-size:12px; font-weight:700; margin-bottom:4px; }}
+    .review-details dd {{ margin:0; overflow-wrap:anywhere; line-height:1.35; }}
+    .review-form {{ display:grid; grid-template-columns:190px minmax(180px,1fr) auto minmax(150px,auto); gap:10px; align-items:end; }}
+    .review-form label {{ display:grid; gap:5px; color:var(--muted); font-size:12px; font-weight:700; }}
+    .review-form select,.review-form textarea {{ width:100%; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; color:var(--ink); }}
+    .review-form textarea {{ resize:vertical; min-height:42px; }}
+    .save-state {{ color:var(--muted); font-size:13px; align-self:center; }}
     @media (max-width:980px) {{ .metrics {{ grid-template-columns:repeat(3,1fr); }} .grid,.hero {{ grid-template-columns:1fr; }} .links {{ justify-content:flex-start; }} }}
+    @media (max-width:760px) {{ .review-details,.review-form {{ grid-template-columns:1fr; }} .dialog-top {{ display:grid; }} }}
     @media (max-width:640px) {{ main,header {{ padding-left:16px; padding-right:16px; }} .metrics {{ grid-template-columns:1fr 1fr; }} .data-table {{ display:block; overflow-x:auto; }} }}
   </style>
 </head>
@@ -343,6 +557,7 @@ def render_home(token: str) -> str:
   </header>
   <main>
     <div class="metrics">{card_html}</div>
+    {owner_review_panel}
     <div class="grid">
       <section>
         <h2>Now</h2>
@@ -359,6 +574,7 @@ def render_home(token: str) -> str:
     </section>
     <p class="sub">Generated: {generated}. This page can refresh boards and show queues; it does not approve or send anything by itself.</p>
   </main>
+  {owner_review_script}
 </body>
 </html>
 """
@@ -417,6 +633,24 @@ class CommandCenterHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def send_json(self, status: int, payload: dict[str, Any]) -> None:
+        self.send_body(status, json.dumps(payload), "application/json; charset=utf-8")
+
+    def read_request_json(self) -> dict[str, Any]:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if length <= 0 or length > 20_000:
+            raise ValueError("Invalid request body.")
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Invalid JSON request body.") from error
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object.")
+        return payload
+
     def token_from_request(self) -> str:
         parsed = urlparse(self.path)
         query_token = parse_qs(parsed.query).get("token", [""])[0]
@@ -456,6 +690,21 @@ class CommandCenterHandler(BaseHTTPRequestHandler):
             return
         self.send_body(404, "Not found.\n", "text/plain; charset=utf-8")
 
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if not self.authorized():
+            self.send_json(403, {"ok": False, "error": "Owner token required."})
+            return
+        if parsed.path == "/review-action":
+            try:
+                saved = save_owner_review_action(self.read_request_json())
+            except ValueError as error:
+                self.send_json(400, {"ok": False, "error": str(error)})
+                return
+            self.send_json(200, {"ok": True, **saved})
+            return
+        self.send_json(404, {"ok": False, "error": "Not found."})
+
 
 def run_server(host: str, port: int) -> None:
     token = command_center_token()
@@ -473,7 +722,7 @@ def run_server(host: str, port: int) -> None:
     server = ThreadingHTTPServer((host, port), CommandCenterHandler)
     setattr(server, "fundz_token", token)
     print(f"FUNDz Command Center listening on http://{host}:{port}")
-    print(f"Owner URL: https://{command_center_hostname()}/?token={token}")
+    print("Owner URL: stored locally in data/local/command-center/fundz-command-center-domain.json")
     server.serve_forever()
 
 
