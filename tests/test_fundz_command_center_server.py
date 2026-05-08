@@ -65,8 +65,16 @@ class FundzCommandCenterServerTests(unittest.TestCase):
 
         self.assertIn("FUNDz Command Center", html)
         self.assertIn("Ada Lovelace", html)
-        self.assertIn("required_2_min_before_live_send", html)
+        self.assertIn("required 2 min before live send", html)
         self.assertIn("token=owner-token", html)
+        self.assertIn("inactive for client-facing sends", html)
+
+    def test_locked_page_is_friendly_without_secret(self) -> None:
+        html = server.render_locked_page()
+
+        self.assertIn("protected", html)
+        self.assertIn("Owner token required", html)
+        self.assertNotIn("?token=", html)
 
 
 if __name__ == "__main__":

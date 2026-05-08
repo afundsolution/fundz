@@ -2,6 +2,15 @@
 
 ## 2026-05-08
 
+### Command Center Friendly Inactive UI
+
+- Reworked the protected Command Center web UI into a clearer safe/inactive dashboard with status chips, metric cards, readable Daily Board items, next queued message previews, and top local actions.
+- Replaced the raw missing-token message with a friendly locked page explaining that the plain domain requires the saved owner link.
+- Kept the domain awake for reporting while preserving all client-facing send, reply, DF/AutoFox edit, and webhook gates.
+- Opened the tokenized owner dashboard in Chrome for Brandon.
+- Verified local locked page 403, local owner page 200, public locked page 403, public owner page 200, focused command-center tests, full `make test` with 192 tests, and `TODAY=2026-05-08 make autonomous` with no safety findings.
+- No live client send, HighLevel reply, DF/AutoFox edit, or webhook wiring was performed.
+
 ### Command Center Domain
 
 - Added `scripts/fundz_command_center_server.py`, a protected local web dashboard for the FUNDz Command Center.
