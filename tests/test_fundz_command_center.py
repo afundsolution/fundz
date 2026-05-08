@@ -1603,6 +1603,47 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertIn("stale_over_24h", fixed[0]["safe_fix_applied"])
         self.assertTrue(any(alert["reason"] == "stale-work" for alert in alerts))
 
+    def test_send_kill_switch_blocks_next_send_queue(self) -> None:
+        packet = {
+            "batch_id": "batch-1",
+            "channel": "Email",
+            "approval_required": True,
+            "live_send_allowed": False,
+            "items": [
+                {
+                    "client_name": "Ada Lovelace",
+                    "channel": "Email",
+                    "message": "Hi Ada, quick FUNDz update.",
+                    "message_phase": "next_round",
+                    "status": "Due For Next Round",
+                    "stage_in_process": "Round 2 Ready",
+                    "send_ready": True,
+                    "outbound_payload_preview": {"subject": "FUNDz update"},
+                }
+            ],
+        }
+        kill_switch = {"enabled": True, "status": "KILL_SWITCH_ON"}
+
+        rows = command_center.build_next_send_queue(packet, kill_switch)
+
+        self.assertEqual(rows[0]["send_allowed_now"], "no")
+        self.assertIn("kill switch is ON", rows[0]["blocked_reason"])
+        self.assertEqual(rows[0]["message_body"], "Hi Ada, quick FUNDz update.")
+
+    def test_send_kill_switch_reads_control_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "kill.json"
+            path.write_text(
+                json.dumps({"enabled": True, "reason": "Owner pause", "owner": "Brandon"}),
+                encoding="utf-8",
+            )
+
+            state = command_center.send_kill_switch_state(path)
+
+        self.assertTrue(state["enabled"])
+        self.assertEqual(state["status"], "KILL_SWITCH_ON")
+        self.assertEqual(state["reason"], "Owner pause")
+
 
 if __name__ == "__main__":
     unittest.main()

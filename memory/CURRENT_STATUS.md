@@ -12,6 +12,9 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 - `make autonomous-watch` exists, but it only runs if `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` is set locally.
 - Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly to run the safe operator from this workspace.
 - Brandon explicitly requested both local LaunchAgents enabled. `com.afundsolution.fundz-autonomous-operator` is enabled and runs hourly with dry-run/no-live-send settings. `com.afundsolution.fundz-imessage-fallback` is enabled and runs every 30 seconds in live owner-command mode.
+- `make command-center` now includes send visibility: `fundz-send-visibility-command-center.md`, `fundz-send-ledger.csv`, `fundz-next-send-queue.csv`, and `fundz-send-kill-switch.md`.
+- The current send visibility board shows 49 local sent/attempted rows, 5 next-send preview rows, and 0 sends allowed now because approval gates still apply.
+- The command-center kill switch control file is `data/local/command-center/fundz-send-kill-switch.json`; setting `"enabled": true` hard-blocks live client/lead sends while local reports continue.
 - Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
 - Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:23 CDT; OK; approval required; live sends disabled).
 - PR #1 was merged at `https://github.com/afundsolution/fundz/pull/1`; branch protection now requires both `memory-check` and `python-tests`.
