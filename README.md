@@ -118,6 +118,10 @@ It writes local, Git-ignored operator outputs:
 - `data/local/command-center/fundz-command-center.md`
 - `data/local/command-center/fundz-command-center.json`
 - `data/local/command-center/fundz-contact-ledger.csv`
+- `data/local/command-center/fundz-send-visibility-command-center.md`
+- `data/local/command-center/fundz-send-ledger.csv`
+- `data/local/command-center/fundz-next-send-queue.csv`
+- `data/local/command-center/fundz-send-kill-switch.md`
 - `data/local/command-center/fundz-pilot-status.md`
 - `data/local/command-center/fundz-weekly-owner-summary.md`
 - `data/local/command-center/fundz-pre-send-release-checklist.md`
@@ -132,7 +136,7 @@ It writes local, Git-ignored operator outputs:
 - `data/local/command-center/fundz-missing-steps-recheck.md`
 - `data/local/command-center/fundz-no-approval-work-queue.csv`
 
-Use this before expanding outreach. It shows today's top actions, owner-review clients, no-recent-contact exceptions, next safe batch candidates, pilot status, AutoFox failure/duplicate/after-hours counts, memory freshness, what changed since the last run, and the current Cloudflare/HighLevel/Credit Tracker blockers. The owner decision outputs convert owner-review clients into approval choices such as billing review, import/round confirmation, onboarding follow-up, approve draft, or hold messaging. The missing-steps recheck keeps the remaining live proof, external permissions, CI, and rollout gaps visible after each refresh.
+Use this before expanding outreach. It shows today's top actions, owner-review clients, no-recent-contact exceptions, next safe batch candidates, pilot status, AutoFox failure/duplicate/after-hours counts, memory freshness, what changed since the last run, and the current Cloudflare/HighLevel/Credit Tracker blockers. The send visibility view shows what FUNDz has sent or attempted from local receipts/audits and the exact next queued message bodies from the current preview packet. The send kill switch blocks live client/lead sends, HighLevel live replies, DF/AutoFox campaign assignment sends, and webhook-driven client responses when `data/local/command-center/fundz-send-kill-switch.json` has `"enabled": true`. The owner decision outputs convert owner-review clients into approval choices such as billing review, import/round confirmation, onboarding follow-up, approve draft, or hold messaging. The missing-steps recheck keeps the remaining live proof, external permissions, CI, and rollout gaps visible after each refresh.
 
 ## Build The ScoreFusion Billing Dashboard
 

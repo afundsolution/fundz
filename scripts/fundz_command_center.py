@@ -58,6 +58,11 @@ BILLING_ROLLOUT_TRIAGE_MD = OUTPUT_DIR / "fundz-billing-rollout-triage.md"
 BILLING_ROLLOUT_TRIAGE_CSV = OUTPUT_DIR / "fundz-billing-rollout-triage.csv"
 CLEAN_BACKUP_PREVIEW_MD = OUTPUT_DIR / "fundz-clean-preview-backup-candidates.md"
 CLEAN_BACKUP_PREVIEW_CSV = OUTPUT_DIR / "fundz-clean-preview-backup-candidates.csv"
+SEND_VISIBILITY_MD = OUTPUT_DIR / "fundz-send-visibility-command-center.md"
+SEND_LEDGER_CSV = OUTPUT_DIR / "fundz-send-ledger.csv"
+NEXT_SEND_QUEUE_CSV = OUTPUT_DIR / "fundz-next-send-queue.csv"
+SEND_KILL_SWITCH_MD = OUTPUT_DIR / "fundz-send-kill-switch.md"
+SEND_KILL_SWITCH_JSON = OUTPUT_DIR / "fundz-send-kill-switch.json"
 LIVE_HOLD_CLEANUP_MD = ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-live-hold-cleanup.md"
 LIVE_HOLD_CLEANUP_CSV = ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-live-hold-cleanup.csv"
 MAINTENANCE_CLEANUP_MD = ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-maintenance-cleanup-board.md"
@@ -1094,7 +1099,10 @@ def build_daily_board(report: dict[str, Any]) -> list[dict[str, str]]:
     queue_rows = report.get("work_queue", [])
     counts = Counter(str(row.get("queue_status") or "Unknown") for row in queue_rows)
     top_problem = next((row for row in queue_rows if row.get("queue_status") in {"Failed", "Blocked", "Proof Needed", "Needs Brandon"}), {})
-    if top_problem:
+    kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
+    if kill_switch.get("enabled"):
+        next_action = "Send kill switch is ON. Review send visibility before approving any client/lead message."
+    elif top_problem:
         next_action = str(top_problem.get("next_step"))
     elif report.get("no_approval_work_queue"):
         next_work = report["no_approval_work_queue"][0]
@@ -1103,6 +1111,8 @@ def build_daily_board(report: dict[str, Any]) -> list[dict[str, str]]:
         next_action = "Run command center, review the work queue, and clear the top blocker."
     proof_row = next((row for row in queue_rows if row.get("queue_status") == "Proof Needed"), top_problem)
     blocker = (report.get("blockers") or ["No current blocker recorded."])[0]
+    if kill_switch.get("enabled"):
+        blocker = f"Send kill switch ON: {kill_switch.get('reason') or 'live sends are paused'}"
     needs_brandon = counts.get("Needs Brandon", 0) + counts.get("Hold", 0)
     objective = (
         "Clean client records and maintenance queues before any live work."
@@ -1127,6 +1137,283 @@ def parse_provider_body(result: dict[str, Any]) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def env_bool(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def send_kill_switch_state(path: Path = SEND_KILL_SWITCH_JSON) -> dict[str, Any]:
+    file_state = read_json(path)
+    enabled = False
+    reason = ""
+    owner = "Brandon"
+    source = "default_off"
+    updated_at = ""
+    if isinstance(file_state, dict):
+        enabled = str(file_state.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
+        reason = str(file_state.get("reason") or "").strip()
+        owner = str(file_state.get("owner") or owner).strip() or owner
+        updated_at = str(file_state.get("updated_at") or "").strip()
+        source = relative_label(path)
+    if env_bool("FUNDZ_SEND_KILL_SWITCH") or env_bool("FUNDZ_COMMAND_CENTER_KILL_SWITCH"):
+        enabled = True
+        reason = reason or "Environment kill switch is enabled."
+        source = "environment"
+    return {
+        "enabled": enabled,
+        "status": "KILL_SWITCH_ON" if enabled else "ready_but_gated",
+        "reason": reason or ("Live sends blocked by command-center kill switch." if enabled else "Kill switch is off; approval gates still apply."),
+        "owner": owner,
+        "updated_at": updated_at,
+        "source": source,
+        "control_file": relative_label(path),
+    }
+
+
+def latest_expansion_packet() -> dict[str, Any]:
+    data = read_json(EXPANSION_BATCH_PACKET)
+    return data if isinstance(data, dict) else {}
+
+
+def expansion_packet_message_lookup(packet: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    batch_id = str(packet.get("batch_id") or "")
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in packet.get("items", []) if isinstance(packet.get("items"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        lookup[(batch_id, normalize_name(str(item.get("client_name") or "")))] = item
+    return lookup
+
+
+def infer_channel_from_receipt(path: Path, data: dict[str, Any], result: dict[str, Any] | None = None) -> str:
+    result = result or {}
+    if result.get("channel"):
+        return str(result.get("channel"))
+    if data.get("channel"):
+        return str(data.get("channel"))
+    name = path.name.lower()
+    mode = str(data.get("mode") or "").lower()
+    if "df-autofox-email" in name:
+        return "DF Email"
+    if "email" in name or "email" in mode:
+        return "Email"
+    if "portal-trigger" in name:
+        return "HighLevel tag trigger"
+    if "batch" in name:
+        return str(data.get("channel") or "HighLevel batch")
+    return str(data.get("mode") or "unknown")
+
+
+def receipt_sent_rows(packet_lookup: dict[tuple[str, str], dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(RECEIPTS_DIR.glob("*-result.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+        data = read_json(path)
+        if not isinstance(data, dict):
+            continue
+        batch_id = str(data.get("batch_id") or "")
+        created_at = str(data.get("created_at") or data.get("attempted_at") or "")
+        if isinstance(data.get("results"), list):
+            for result in data.get("results", []):
+                if not isinstance(result, dict):
+                    continue
+                client_name = str(result.get("client_name") or data.get("client_name") or "")
+                packet_item = packet_lookup.get((batch_id, normalize_name(client_name)), {})
+                provider = result.get("result") if isinstance(result.get("result"), dict) else {}
+                provider_body = parse_provider_body(provider)
+                sent = bool(result.get("sent") or provider.get("sent"))
+                rows.append(
+                    {
+                        "sent_at": created_at,
+                        "client_or_lead": client_name,
+                        "audience": "client_or_lead",
+                        "system": "FUNDz",
+                        "channel": infer_channel_from_receipt(path, data, result),
+                        "campaign_or_batch": batch_id or str(data.get("mode") or ""),
+                        "status": "sent" if sent else "failed_or_blocked",
+                        "http_status": result.get("status") or provider.get("status") or "",
+                        "subject": (packet_item.get("outbound_payload_preview") or {}).get("subject", ""),
+                        "message_body_or_summary": packet_item.get("message", ""),
+                        "proof": relative_label(path.with_name(path.name.replace("-result.json", "-receipt.md")))
+                        if path.with_name(path.name.replace("-result.json", "-receipt.md")).exists()
+                        else relative_label(path),
+                        "source": relative_label(path),
+                        "provider_message_id": provider_body.get("messageId") or provider_body.get("emailMessageId") or "",
+                    }
+                )
+        elif data.get("sent") is not None:
+            sent = bool(data.get("sent"))
+            rows.append(
+                {
+                    "sent_at": str(data.get("attempted_at") or data.get("created_at") or ""),
+                    "client_or_lead": str(data.get("client_name") or ""),
+                    "audience": "client_or_lead",
+                    "system": "FUNDz",
+                    "channel": infer_channel_from_receipt(path, data),
+                    "campaign_or_batch": str(data.get("approved_packet") or data.get("mode") or ""),
+                    "status": "sent" if sent else "held_or_failed",
+                    "http_status": str(data.get("provider_result") or ""),
+                    "subject": str(data.get("subject") or ""),
+                    "message_body_or_summary": str(data.get("provider_proof") or ""),
+                    "proof": relative_label(path.with_name(path.name.replace("-result.json", "-receipt.md")))
+                    if path.with_name(path.name.replace("-result.json", "-receipt.md")).exists()
+                    else relative_label(path),
+                    "source": relative_label(path),
+                    "provider_message_id": "",
+                }
+            )
+    return rows
+
+
+def highlevel_reply_sent_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for receipt in read_jsonl(HIGHLEVEL_REPLY_RECEIPTS_JSONL):
+        if not receipt.get("sent"):
+            continue
+        rows.append(
+            {
+                "sent_at": str(receipt.get("time") or ""),
+                "client_or_lead": str(receipt.get("client") or ""),
+                "audience": "client_or_lead",
+                "system": "HighLevel",
+                "channel": str(receipt.get("channel") or "HighLevel"),
+                "campaign_or_batch": "inbound_reply",
+                "status": "sent",
+                "http_status": str(receipt.get("status") or ""),
+                "subject": "",
+                "message_body_or_summary": str(receipt.get("reply_summary") or ""),
+                "proof": relative_label(HIGHLEVEL_REPLY_RECEIPTS_JSONL),
+                "source": relative_label(HIGHLEVEL_REPLY_RECEIPTS_JSONL),
+                "provider_message_id": hashlib.sha256(str(receipt.get("message_id") or "").encode("utf-8")).hexdigest()[:12]
+                if receipt.get("message_id")
+                else "",
+            }
+        )
+    return rows
+
+
+def owner_safe_recipient(value: Any) -> str:
+    text = str(value or "").strip()
+    if "@" not in text:
+        return text
+    local, _, domain = text.partition("@")
+    domain_name, dot, suffix = domain.partition(".")
+    return f"{local[:2]}***@{domain_name[:2]}***{dot}{suffix}" if domain else "[redacted-email]"
+
+
+def autofox_audit_sent_rows(limit: int = 5000) -> list[dict[str, Any]]:
+    candidates = sorted(
+        (ROOT / "data" / "local" / "autofox-audits").glob("autofox-normalized-outbound-*.csv"),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in read_csv_rows(candidates[0])[:limit]:
+        status = str(row.get("status") or "").lower()
+        if status not in {"sent", "failed"}:
+            continue
+        rows.append(
+            {
+                "sent_at": str(row.get("timestamp") or ""),
+                "client_or_lead": owner_safe_recipient(row.get("recipient")),
+                "audience": "client_or_lead",
+                "system": "AutoFox/Credit Tracker audit",
+                "channel": str(row.get("channel") or ""),
+                "campaign_or_batch": str(row.get("campaign") or ""),
+                "status": str(row.get("status") or ""),
+                "http_status": "",
+                "subject": "",
+                "message_body_or_summary": str(row.get("body") or ""),
+                "proof": relative_label(candidates[0]),
+                "source": relative_label(candidates[0]),
+                "provider_message_id": str(row.get("event_id") or ""),
+            }
+        )
+    return rows
+
+
+def build_send_ledger(packet: dict[str, Any]) -> list[dict[str, Any]]:
+    packet_lookup = expansion_packet_message_lookup(packet)
+    rows = receipt_sent_rows(packet_lookup)
+    rows.extend(highlevel_reply_sent_rows())
+    rows.extend(autofox_audit_sent_rows())
+    rows.sort(key=lambda row: str(row.get("sent_at") or ""), reverse=True)
+    return rows
+
+
+def build_next_send_queue(packet: dict[str, Any], kill_switch: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    batch_id = str(packet.get("batch_id") or "")
+    approval_required = bool(packet.get("approval_required", True))
+    live_send_allowed = bool(packet.get("live_send_allowed"))
+    for item in packet.get("items", []) if isinstance(packet.get("items"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        blocked_reasons = list(item.get("do_not_send_because") or [])
+        if item.get("blocked_reason"):
+            blocked_reasons.append(str(item.get("blocked_reason")))
+        if kill_switch.get("enabled"):
+            blocked_reasons.append("Command-center kill switch is ON.")
+        elif approval_required:
+            blocked_reasons.append("Live send still requires Brandon approval at action time.")
+        send_allowed = bool(item.get("send_ready")) and not blocked_reasons and live_send_allowed
+        rows.append(
+            {
+                "queue_rank": len(rows) + 1,
+                "client_or_lead": str(item.get("client_name") or ""),
+                "audience": "client",
+                "channel": str(item.get("channel") or packet.get("channel") or ""),
+                "subject": str((item.get("outbound_payload_preview") or {}).get("subject") or ""),
+                "message_body": str(item.get("message") or ""),
+                "campaign_or_batch": batch_id,
+                "message_phase": str(item.get("message_phase") or ""),
+                "status": str(item.get("status") or ""),
+                "stage": str(item.get("stage_in_process") or ""),
+                "send_ready": "yes" if item.get("send_ready") else "no",
+                "kill_switch": str(kill_switch.get("status") or ""),
+                "send_allowed_now": "yes" if send_allowed else "no",
+                "blocked_reason": "; ".join(blocked_reasons),
+                "evidence": relative_label(EXPANSION_BATCH_PACKET),
+            }
+        )
+    return rows
+
+
+SEND_LEDGER_FIELDS = [
+    "sent_at",
+    "client_or_lead",
+    "audience",
+    "system",
+    "channel",
+    "campaign_or_batch",
+    "status",
+    "http_status",
+    "subject",
+    "message_body_or_summary",
+    "proof",
+    "source",
+    "provider_message_id",
+]
+
+NEXT_SEND_QUEUE_FIELDS = [
+    "queue_rank",
+    "client_or_lead",
+    "audience",
+    "channel",
+    "subject",
+    "message_body",
+    "campaign_or_batch",
+    "message_phase",
+    "status",
+    "stage",
+    "send_ready",
+    "kill_switch",
+    "send_allowed_now",
+    "blocked_reason",
+    "evidence",
+]
 
 
 def normalize_name(name: str) -> str:
@@ -2213,6 +2500,10 @@ def build_command_center(limit: int = 10) -> dict[str, Any]:
         for action in queue.get("actions", [])
         if action.get("action_type") == "draft_for_approval" and not action.get("risky_hits")
     ][:5]
+    expansion_packet = latest_expansion_packet()
+    kill_switch = send_kill_switch_state()
+    send_ledger = build_send_ledger(expansion_packet)
+    next_send_queue = build_next_send_queue(expansion_packet, kill_switch)
 
     report = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -2241,6 +2532,9 @@ def build_command_center(limit: int = 10) -> dict[str, Any]:
         "bridge": bridge_status(),
         "scorefusion": scorefusion_snapshot(),
         "receipts": receipt_summary(),
+        "send_kill_switch": kill_switch,
+        "send_ledger": send_ledger,
+        "next_send_queue": next_send_queue,
         "pilot_status": build_pilot_status_report(),
         "memory_freshness": memory_freshness(state),
         "sequence_assignments": load_sequence_assignment_receipts(),
@@ -2919,6 +3213,153 @@ def write_work_queue_outputs(report: dict[str, Any]) -> None:
     )
 
 
+def write_send_kill_switch_status(report: dict[str, Any], path: Path = SEND_KILL_SWITCH_MD) -> None:
+    kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
+    SEND_KILL_SWITCH_JSON.parent.mkdir(parents=True, exist_ok=True)
+    if not SEND_KILL_SWITCH_JSON.exists():
+        SEND_KILL_SWITCH_JSON.write_text(
+            json.dumps(
+                {
+                    "enabled": False,
+                    "reason": "Default off; approval gates still apply.",
+                    "owner": "Brandon",
+                    "updated_at": report.get("generated_at"),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    lines = [
+        "# FUNDz Send Kill Switch",
+        "",
+        f"Generated: {report.get('generated_at')}",
+        "",
+        f"- Status: {kill_switch.get('status', 'unknown')}",
+        f"- Enabled: {kill_switch.get('enabled', False)}",
+        f"- Reason: {kill_switch.get('reason', '')}",
+        f"- Owner: {kill_switch.get('owner', 'Brandon')}",
+        f"- Source: {kill_switch.get('source', '')}",
+        f"- Control file: {kill_switch.get('control_file', relative_label(SEND_KILL_SWITCH_JSON))}",
+        "",
+        "## What It Blocks",
+        "- Live client sends",
+        "- Live lead sends",
+        "- Live HighLevel replies",
+        "- DF/AutoFox campaign assignment sends",
+        "- Webhook-driven client responses",
+        "",
+        "## What Still Runs",
+        "- Local command-center reporting",
+        "- Send ledger rebuilds",
+        "- Next-send preview queue rebuilds",
+        "- Dry-run/no-live-send autonomous operator checks",
+        "",
+        "## Toggle",
+        f"Create or edit `{relative_label(SEND_KILL_SWITCH_JSON)}` with:",
+        "",
+        "```json",
+        '{ "enabled": true, "reason": "Owner pause", "owner": "Brandon" }',
+        "```",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_send_visibility(report: dict[str, Any], path: Path = SEND_VISIBILITY_MD) -> None:
+    kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
+    ledger = report.get("send_ledger", [])
+    next_queue = report.get("next_send_queue", [])
+    sent_counts = Counter(str(row.get("channel") or "Unknown") for row in ledger if str(row.get("status") or "").lower() == "sent")
+    queue_counts = Counter(str(row.get("send_allowed_now") or "no") for row in next_queue)
+    lines = [
+        "# FUNDz Send Visibility Command Center",
+        "",
+        f"Generated: {report.get('generated_at')}",
+        "",
+        "## Kill Switch",
+        f"- Status: {kill_switch.get('status', 'unknown')}",
+        f"- Enabled: {kill_switch.get('enabled', False)}",
+        f"- Reason: {kill_switch.get('reason', '')}",
+        f"- Control: {relative_label(SEND_KILL_SWITCH_MD)}",
+        "",
+        "## Sent Ledger",
+        f"- Rows: {len(ledger)}",
+        f"- CSV: {relative_label(SEND_LEDGER_CSV)}",
+    ]
+    if sent_counts:
+        for channel, count in sent_counts.most_common():
+            lines.append(f"- Sent via {channel}: {count}")
+    else:
+        lines.append("- No sent rows found in local receipts/audits.")
+    lines.extend(
+        [
+            "",
+            "### Recent Sent / Attempted Rows",
+            "| Sent at | Client/Lead | System | Channel | Status | Message / summary | Proof |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for row in ledger[:30]:
+        lines.append(
+            "| "
+            + " | ".join(
+                markdown_cell(row.get(field))
+                for field in (
+                    "sent_at",
+                    "client_or_lead",
+                    "system",
+                    "channel",
+                    "status",
+                    "message_body_or_summary",
+                    "proof",
+                )
+            )
+            + " |"
+        )
+    if len(ledger) > 30:
+        lines.append(f"- Plus {len(ledger) - 30} more rows in `{relative_label(SEND_LEDGER_CSV)}`.")
+
+    lines.extend(
+        [
+            "",
+            "## Next Send Queue Preview",
+            f"- Rows: {len(next_queue)}",
+            f"- CSV: {relative_label(NEXT_SEND_QUEUE_CSV)}",
+            f"- Allowed now: {queue_counts.get('yes', 0)}",
+            f"- Blocked/gated now: {queue_counts.get('no', 0)}",
+            "",
+            "| Rank | Client/Lead | Channel | Subject | Send allowed now | Blocked reason | Message body |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for row in next_queue[:25]:
+        lines.append(
+            "| "
+            + " | ".join(
+                markdown_cell(row.get(field))
+                for field in (
+                    "queue_rank",
+                    "client_or_lead",
+                    "channel",
+                    "subject",
+                    "send_allowed_now",
+                    "blocked_reason",
+                    "message_body",
+                )
+            )
+            + " |"
+        )
+    if not next_queue:
+        lines.append("| - | None | - | - | no | No current expansion packet found. | - |")
+    if len(next_queue) > 25:
+        lines.append(f"- Plus {len(next_queue) - 25} more queued rows in `{relative_label(NEXT_SEND_QUEUE_CSV)}`.")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def write_daily_board(report: dict[str, Any], path: Path = DAILY_BOARD_MD) -> None:
     board = report.get("daily_board", [])
     lines = [
@@ -3068,6 +3509,9 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Google Sheet import CSV: {relative_label(WORK_QUEUE_SHEET_IMPORT_CSV)}",
             f"- Daily board: {relative_label(DAILY_BOARD_MD)}",
             f"- Client communication control board: {relative_label(COMMUNICATION_CONTROL_BOARD_MD)}",
+            f"- Send visibility command center: {relative_label(SEND_VISIBILITY_MD)}",
+            f"- Next send queue CSV: {relative_label(NEXT_SEND_QUEUE_CSV)}",
+            f"- Send kill switch: {relative_label(SEND_KILL_SWITCH_MD)}",
             f"- Billing rollout triage: {relative_label(BILLING_ROLLOUT_TRIAGE_MD)}",
             f"- Clean backup preview candidates: {relative_label(CLEAN_BACKUP_PREVIEW_MD)}",
             f"- Governor safe-fix report: {relative_label(GOVERNOR_SAFE_FIXES_MD)}",
@@ -3077,6 +3521,20 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
     )
     for item in report.get("daily_board", []):
         lines.append(f"- {item.get('label')}: {item.get('value')}")
+    kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
+    next_queue = report.get("next_send_queue", [])
+    lines.extend(
+        [
+            "",
+            "## Send Visibility",
+            f"- Kill switch: {kill_switch.get('status', 'unknown')}",
+            f"- Sent ledger rows: {len(report.get('send_ledger', []))}",
+            f"- Next send queue rows: {len(next_queue)}",
+            f"- Next-send allowed now: {sum(1 for row in next_queue if row.get('send_allowed_now') == 'yes')}",
+            f"- Next-send gated now: {sum(1 for row in next_queue if row.get('send_allowed_now') != 'yes')}",
+            f"- Owner view: {relative_label(SEND_VISIBILITY_MD)}",
+        ]
+    )
     queue_counts = Counter(str(row.get("queue_status") or "Unknown") for row in report.get("work_queue", []))
     lines.extend(
         [
@@ -3533,6 +3991,10 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
     write_daily_board(report, DAILY_BOARD_MD)
     write_governor_safe_fixes(report, GOVERNOR_SAFE_FIXES_MD)
     write_communication_control_board(report, COMMUNICATION_CONTROL_BOARD_MD, COMMUNICATION_CONTROL_BOARD_CSV)
+    write_send_kill_switch_status(report, SEND_KILL_SWITCH_MD)
+    write_send_visibility(report, SEND_VISIBILITY_MD)
+    write_dict_csv(SEND_LEDGER_CSV, report.get("send_ledger", []), SEND_LEDGER_FIELDS)
+    write_dict_csv(NEXT_SEND_QUEUE_CSV, report.get("next_send_queue", []), NEXT_SEND_QUEUE_FIELDS)
     write_markdown(report, COMMAND_CENTER_MD)
     write_pilot_report(report, PILOT_REPORT_MD)
     write_weekly_summary(report, WEEKLY_SUMMARY_MD)
@@ -3564,6 +4026,10 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
         "governor_alerts": relative_label(GOVERNOR_ALERTS_CSV),
         "communication_control_board": relative_label(COMMUNICATION_CONTROL_BOARD_MD),
         "communication_control_board_csv": relative_label(COMMUNICATION_CONTROL_BOARD_CSV),
+        "send_visibility": relative_label(SEND_VISIBILITY_MD),
+        "send_ledger_csv": relative_label(SEND_LEDGER_CSV),
+        "next_send_queue_csv": relative_label(NEXT_SEND_QUEUE_CSV),
+        "send_kill_switch": relative_label(SEND_KILL_SWITCH_MD),
         "ledger": relative_label(CONTACT_LEDGER_CSV),
         "pilot": relative_label(PILOT_REPORT_MD),
         "weekly": relative_label(WEEKLY_SUMMARY_MD),
@@ -3617,6 +4083,10 @@ def main() -> None:
     print(f"- Governor alerts: {paths['governor_alerts']}")
     print(f"- Communication control board: {paths['communication_control_board']}")
     print(f"- Communication control board CSV: {paths['communication_control_board_csv']}")
+    print(f"- Send visibility command center: {paths['send_visibility']}")
+    print(f"- Send ledger CSV: {paths['send_ledger_csv']}")
+    print(f"- Next send queue CSV: {paths['next_send_queue_csv']}")
+    print(f"- Send kill switch: {paths['send_kill_switch']}")
     print(f"- Contact ledger: {paths['ledger']}")
     print(f"- Pilot status: {paths['pilot']}")
     print(f"- Weekly summary: {paths['weekly']}")

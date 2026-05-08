@@ -2,6 +2,16 @@
 
 ## 2026-05-08
 
+### Command Center Send Visibility
+
+- Added a Command Center send visibility board at `data/local/command-center/fundz-send-visibility-command-center.md`.
+- Added a consolidated local send ledger at `data/local/command-center/fundz-send-ledger.csv` from FUNDz receipts, HighLevel reply receipts, and the latest normalized AutoFox/Credit Tracker audit.
+- Added a next-send queue at `data/local/command-center/fundz-next-send-queue.csv` that shows the exact queued preview message bodies and why each row is or is not allowed to send now.
+- Added a Command Center kill switch status file at `data/local/command-center/fundz-send-kill-switch.md` and local control file at `data/local/command-center/fundz-send-kill-switch.json`.
+- The kill switch blocks live client/lead sends, live HighLevel replies, DF/AutoFox campaign-assignment sends, and webhook-driven client responses when enabled; local reporting and dry-run autonomy still run.
+- Updated the Daily Board so an enabled kill switch is visible in the blocked line before any live send decision.
+- Added test coverage for kill-switch blocking, control-file state, and next-send queue gating.
+
 ### LaunchAgent Wake
 
 - Recreated `~/Library/LaunchAgents/com.afundsolution.fundz-autonomous-operator.plist` after Brandon explicitly requested both FUNDz LaunchAgents enabled.
