@@ -16,6 +16,11 @@ OUTPUT_DIR = ROOT / "data" / "local" / "credit-tracker-replies"
 
 PENDING_WORDS = ("pending", "queued", "scheduled", "dead", "error", "failed")
 TRACKER_WORDS = ("credit tracker", "credit-tracker", "credit_tracker")
+BILLING_WORDS = ("billing", "payment", "paid", "invoice", "card", "scorefusion", "score fusion", "failed payment")
+CREDIT_MONITORING_NOTE = (
+    "In the meantime, you can also check Credit Karma or another credit monitoring service "
+    "if you want to watch for changes sooner."
+)
 
 
 def newest_files() -> list[Path]:
@@ -81,6 +86,11 @@ def is_credit_tracker_record(record: dict) -> bool:
     return any(word in text for word in TRACKER_WORDS)
 
 
+def is_billing_record(record: dict) -> bool:
+    text = record_text(record)
+    return any(word in text for word in BILLING_WORDS)
+
+
 def first_name(record: dict) -> str:
     name = value_for(
         record,
@@ -132,6 +142,8 @@ def next_step(record: dict) -> str:
 
 
 def review_note(record: dict) -> str:
+    if is_billing_record(record):
+        return "Review before sending: ScoreFusion/billing issue should be checked before sending anything stronger."
     status = value_for(record, ("status", "state", "stage", "credit_status", "tracker_status")).lower()
     if any(word in status for word in PENDING_WORDS):
         return "Review before sending: tracker item is not confirmed complete."
@@ -140,11 +152,22 @@ def review_note(record: dict) -> str:
     return "Ready for owner review."
 
 
+def billing_reply(record: dict) -> str:
+    return (
+        f"Hi {first_name(record)}, I see this may need ScoreFusion billing review. "
+        "Please check your ScoreFusion account for any missed payment or billing notice. "
+        "If the payment was recently made, please allow 24-48 hours for it to finish processing. "
+        "I am also going to flag this for Brandon to review so we do not give you the wrong information."
+    )
+
+
 def draft_reply(record: dict) -> str:
+    if is_billing_record(record):
+        return billing_reply(record)
     return (
         f"Hi {first_name(record)}, quick update from FUNDz: "
         f"{plain_status(record)} {next_step(record)} "
-        "We will keep tracking this and follow up when there is movement."
+        f"We will keep tracking this and follow up when there is movement. {CREDIT_MONITORING_NOTE}"
     )
 
 

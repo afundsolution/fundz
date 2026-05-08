@@ -17,3 +17,39 @@ Do not track these in Git:
 - Credentials or connection strings.
 
 Production/user data should live in a managed database with automated backups and point-in-time recovery when available.
+
+## Live Memory
+
+`db/migrations/001_live_memory.sql` creates the live FUNDz memory tables:
+
+- `fundz_memory_snapshots`
+- `fundz_client_memory`
+- `fundz_memory_events`
+- `fundz_active_client_memory`
+
+To apply the schema and sync the current local operational state to Supabase or another Postgres database:
+
+```sh
+scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state
+```
+
+Set one of these in `.env.local` first:
+
+- `FUNDZ_MEMORY_DATABASE_URL`
+- `SUPABASE_DB_URL`
+- `DATABASE_URL`
+- `NEON_DATABASE_URL`
+
+For review without touching the database:
+
+```sh
+scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state --print-sql
+```
+
+If `psql` access is blocked because the database password is unavailable, generate Supabase SQL editor chunks instead:
+
+```sh
+scripts/fundz_postgres_memory.py --sync-operational-state --write-dashboard-chunks data/local/supabase-dashboard-sync
+```
+
+Run the chunk files in order in the Supabase SQL editor. The final `*-verify.sql` chunk checks total client rows, active client rows, active-view rows, and the dashboard sync marker.

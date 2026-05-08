@@ -2,15 +2,23 @@
 
 ## Project Goal
 
-FUNDz is a local operational automation project for client updates, DisputeFox/HighLevel workflows, credit tracker bridge work, ScoreFusion billing reporting, and semi-autonomous action preparation.
+FUNDz is a local operational automation project for client updates, DisputeFox/HighLevel workflows, credit tracker bridge work, ScoreFusion billing reporting, and semi-autonomous action preparation. As of May 8, 2026, this folder can run safe local autonomy while remaining parked from live client operations.
 
 ## Current State
 
+- FUNDz is currently fun, locally autonomous in safe mode, inactive for live operations, and not sending.
+- `FUNDZ_SLEEP_MODE.md` is the visible sleep-mode sign for this folder.
+- `make autonomous` runs the safe local autonomous operator once. It refreshes the autonomy review, maintenance autopilot, intake governor, intake dashboard, phone-app intake, command center, and tests while forcing child settings to dry-run/no-live-send mode.
+- `make autonomous-watch` exists, but it only runs if `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` is set locally.
+- Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
+- `make inactive` is available and was run on May 7, 2026 at 10:37:44 CDT.
+- The inactive run stopped `fundz-bridge` and `fundz-tunnel`, found `fundz-highlevel-poller` already stopped, disabled the `com.afundsolution.fundz-imessage-fallback` LaunchAgent, and wrote `data/local/command-center/fundz-inactive-receipt.md`.
+- Verification after the May 8 autonomy pass and fresh `make inactive`: no `screen` sessions remain, the iMessage fallback LaunchAgent is disabled, and no matching bridge/tunnel/poller/fallback processes are running.
 - The portable AI handoff scaffold has been added to the FUNDz repo.
 - `AGENTS.md` now tells agents how to start, work safely, and hand off.
 - `memory/` contains the durable context packet for future agents.
 - `make start`, `make memory-check`, and `make handoff MSG="..."` are available.
-- The private GitHub repo is `https://github.com/afundsolution/fundz`.
+- The GitHub repo is public at `https://github.com/afundsolution/fundz`.
 - A FUNDz Google Drive backup doc exists at `https://docs.google.com/document/d/1LJvMBEzbjSp9ZIuRrrEgVWEFOEu7SOOM4Eh8aP7owC4/edit`.
 - The GitHub Memory Check workflow has passed.
 - Existing FUNDz app logic was not changed as part of this memory-system installation.
@@ -18,10 +26,20 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 
 ## Active Workstream
 
-Install and activate the portable AI handoff workflow inside FUNDz.
+Safe local autonomy / sleep mode. Continue local board, intake, maintenance, proposal, and test refreshes through `make autonomous`. Do not continue live-pilot operations, client outreach, webhook work, DF/AutoFox edits, browser actions, or owner-command loops unless Brandon gives exact action-time approval for the specific live step.
 
 ## Recently Completed
 
+- Added `scripts/fundz_autonomous_operator.py`, `make autonomous`, and `make autonomous-watch`.
+- Updated `.env.example`, `README.md`, `FUNDZ_SLEEP_MODE.md`, and `assistant/fundz-assistant.md` for safe local autonomy.
+- Added `tests/test_fundz_autonomous_operator.py`.
+- Ran `python3 -m unittest tests.test_fundz_autonomous_operator -q`: passed 3 tests.
+- Ran `TODAY=2026-05-08 make autonomous`: passed 6/6 operator steps with no safety findings. Maintenance autopilot passed 7/7 including tests. Runtime remained quiet with the fallback LaunchAgent disabled.
+- Added `FUNDZ_SLEEP_MODE.md`, a friendly inactive status page and wake checklist.
+- Added `scripts/fundz_inactive.sh` and `make inactive` to repeatably stop the local runtime pieces.
+- Ran `make inactive` and verified the folder is quiet: no screen sessions, disabled fallback LaunchAgent, and no matching FUNDz runtime processes.
+- Verified `sh scripts/check-memory.sh` passed.
+- Verified `make test` passed: 139 tests.
 - Copied the handoff scaffold from `/Users/turbo/Desktop/Save A Token`.
 - Added command scripts for start, validation, commit, and push.
 - Added GitHub Actions memory validation workflow.
@@ -31,13 +49,204 @@ Install and activate the portable AI handoff workflow inside FUNDz.
 - Created and pushed to private GitHub repo `afundsolution/fundz`.
 - Verified the GitHub Memory Check workflow passed.
 - Created and verified the FUNDz Google Drive backup doc.
+- Confirmed the Credit Tracker bridge is healthy locally on port `8787`.
+- Authorized Cloudflare Tunnel for `afundsolution.com` on May 6, 2026 and Cloudflare saved the origin certificate at `~/.cloudflared/cert.pem`.
+- Created the permanent named Cloudflare tunnel `fundz-credit-tracker` with hostname `fundz.afundsolution.com`.
+- Started the local Credit Tracker bridge and named tunnel in detached `screen` sessions: `fundz-bridge` and `fundz-tunnel`.
+- Verified public tunnel health: `https://fundz.afundsolution.com/health` returns the FUNDz bridge OK response.
+- Added a HighLevel inbox poller fallback so FUNDz can read inbound client texts directly from HighLevel when Cloudflare/webhooks are unavailable.
+- Tested the HighLevel inbox poller in preview mode. HighLevel returned `The token is not authorized for this scope`, so the token needs conversation/message read access before this fallback can go live.
+- Added `assistant/fundz-routine-messaging-plan.md` as the operating plan for routine member outreach. Current baseline: 180 active members, 66 draft-ready for approval, 35 monitor-only, and 79 needing owner review before messaging.
+- The latest AutoFox audit baseline remains 5,451 outbound records, 559 unique recipients, 250 failed/error records, 75 duplicate candidates, 0 risky-language records, and 14 outside-business-hour records.
+- Sent the approved five-member Credit Tracker/app pilot on May 4, 2026 at 12:38 PM CDT. The selected pilot members were Anitra Thomas, Ashley Stancil, Brenda Taylor, Deja Eaton, and Jasmine Neeley. Provider accepted all five Credit Tracker/app messages with HTTP `201`; failed/blocked/skipped counts were all `0`.
+- Sent the matching email companion batch on May 4, 2026. Email initially sent successfully to Ashley Stancil, Brenda Taylor, Deja Eaton, and Jasmine Neeley with HTTP `201`. Anitra Thomas failed because HighLevel returned `Contact has no email` for the resolved contact record.
+- With Brandon approval, updated Anitra Thomas's HighLevel contact email from local state and retried only her email. HighLevel accepted the contact update with HTTP `200` and accepted the email retry with HTTP `201`.
+- Updated the routine messaging plan so future approved outreach sends Credit Tracker/app and email together, with a contact-record email check before sending.
+- Updated the routine messaging plan to a time-in-system high-touch cadence: daily business-day touches for onboarding/action-needed/next-round windows, every other business day for most active members, and at least twice weekly for long-running stable files.
+- Found that the current successful sends prove HighLevel SMS/email delivery, not Credit Tracker app/portal visibility.
+- Added `scripts/fundz_autofox_portal_trigger.py` plus `assistant/autofox-credit-tracker-portal-setup.md` so FUNDz can trigger an AutoFox/Credit Tracker portal workflow once Brandon identifies/configures the workflow ID or trigger tag.
+- Prepared a single-contact Erika Jordan portal/app visibility test packet. Erika resolves cleanly by email and phone, and the portal trigger preview is ready but blocked until the AutoFox/Credit Tracker workflow ID or trigger tag is configured.
+- Sent Erika Jordan a controlled Credit Tracker/SMS and email test on May 4, 2026. Both were accepted by HighLevel with HTTP `201`. The portal/app trigger remains blocked because the AutoFox/Credit Tracker workflow ID or trigger tag is not configured.
+- Configured `AUTOFOX_PORTAL_TRIGGER_TAG=fundz_portal_touch` locally and applied that tag live to Erika Jordan. HighLevel accepted the tag action with HTTP `201`.
+- Re-ran Erika's live portal trigger on May 4, 2026 at 10:58 PM CDT after Brandon approved the test. HighLevel returned HTTP `201`, but `tagsAdded` was empty because Erika already had `fundz_portal_touch`; this may not fire tag-added workflows.
+- `scripts/fundz_autofox_portal_trigger.py` now reports whether a trigger tag was newly added or already present and supports `--force-retrigger` to remove/re-add the tag after fresh approval.
+- With Brandon approval, Erika was force re-triggered on May 4, 2026 at 11:04 PM CDT. HighLevel removed `fundz_portal_touch` with HTTP `200` and then re-added it with HTTP `201`; the receipt reports `newly_added: true`.
+- Follow-up HighLevel contact proof was captured for Erika: contact read returned HTTP `200`, the contact still includes `fundz_portal_touch`, and HighLevel shows `dateUpdated` `2026-05-05T04:04:08.733Z`. Proof note: `data/local/semi-autonomous/receipts/erika-portal-trigger-proof-20260504.md`.
+- DF/AutoFox delivery proof could not be captured from the controllable browser sessions because Scorexer Google sign-in failed with OAuth `Error 400: origin_mismatch` in Chrome, Safari is not logged into Pulse, and the logged-in Pulse dashboard is in the Codex in-app browser that Computer Use cannot control directly.
+- DF/AutoFox delivery proof was then captured through Browser Use attached to the Codex in-app browser. Erika's active Round 1 AutoFox workflow shows retro-added `App SMS Sent` actions are present, but they are still `In-Progress`; activity history shows email successes and regular SMS failures with no success line for those retro-added actions.
+- A fresh DF AutoFox test campaign now proves the Mobile App SMS channel itself works. `FUNDz Erika Mobile App SMS Test 2026-05-05` was created with one instant Mobile App SMS action, manually assigned to Erika, and completed successfully. DF activity history shows `Fresh Erika Mobile App SMS Test Sent Mobile App SMS` with status `Success`.
+- A reusable current-member redirect campaign now exists in DF AutoFox: `FUNDz App Communication Notice - Email SMS App`. It is active, manual, Client/Lead, System category, and has Step 1 `Use Credit Tracker App for Updates` starting instantly.
+- The redirect campaign currently has saved regular SMS, Mobile App SMS, and Email actions telling members to communicate through the Credit Tracker app/client portal.
+- The matching email action is saved with subject `Please Use Your Credit Tracker App for Updates` and recipient `Client Email`. Proof screenshot: `data/local/semi-autonomous/receipts/app-communication-all-three-actions-visible-20260505.png`.
+- With Brandon logged into DF/Pulse, the redirect campaign was manually assigned to Erika Jordan on May 5, 2026. DF shows the workflow completed: Mobile App SMS succeeded, Email succeeded, and the old regular SMS failed. Proof screenshot: `data/local/semi-autonomous/receipts/app-communication-erika-sent-proof-20260505.png`.
+- Erika still did not show the expected portal/mobile-app message, so the next correction is inside DF/AutoFox: add `Mobile App SMS` actions with the same content as the old SMS actions.
+- Added `assistant/df-mobile-app-sms-migration.md` with the exact DF sequence-editing instructions and approved message body.
+- Brandon logged into DF, and the first AutoFox sequence edit was completed.
+- In `Client (step 02) - Client On-Boarding & Portal Login`, Step 1 now has a saved `Mobile App SMS` action named `Agent Welcome Mobile App SMS`.
+- The saved Mobile App SMS body is: "Hi [FIRST-NAME], This is [COMPANY-NAME] Please Check your email for your Client Portal Login details, and some instructions on the next steps. Any questions, please let me know‼️ (346) 680-3466".
+- The old regular SMS action is still present in Step 1; it has not been disabled or deleted yet.
+- In `Client (step 04) - Round 1 Sent & Campaign`, Steps 1, 2, 3, and 4 now each show a saved `Mobile App SMS` action copied from the existing SMS action content.
+- The old regular SMS actions are still present in the Round 1 workflow; they have not been disabled or deleted yet.
+- In Round 2 through Round 6 sent-and-campaign workflows, every regular SMS spot now has a matching saved `Mobile App SMS` action:
+  - Round 2 (`autofox_id=160044`): Steps 1, 2, and 3.
+  - Round 3 (`autofox_id=160054`): Steps 1 and 4.
+  - Round 4 (`autofox_id=160055`): Steps 1 and 3.
+  - Round 5 (`autofox_id=160061`): Steps 1 and 3.
+  - Round 6 (`autofox_id=160063`): Steps 1 and 3.
+- The new Round 2-6 Mobile App SMS messages mix credit education, monitoring-payment reminders, portal/mail reminders, and soft tradeline review language, with Brandon's number standardized as `(346)680-3466`.
+- The old regular SMS actions are still present in Round 2-6; they have not been disabled or deleted yet.
+- Brandon approved the four-lane AutoFox member experience system. The command center now generates `data/local/command-center/fundz-autofox-member-experience-system.md` and `data/local/command-center/fundz-autofox-credit-tips-round1-10.csv`.
+- The four-lane generated plan maps AutoFox into Onboarding, Round Updates, Education / Credit Tips, and Problem / Owner Review, and includes the 20 Mobile App SMS credit tips for Rounds 1 through 10.
+- In Round 7 through Round 10 sent-and-campaign workflows, every regular SMS spot found in Steps 1 and 3 now has a matching saved `Mobile App SMS` action:
+  - Round 7 (`autofox_id=160065`): Steps 1 and 3.
+  - Round 8 (`autofox_id=160067`): Steps 1 and 3.
+  - Round 9 (`autofox_id=160069`): Steps 1 and 3.
+  - Round 10 (`autofox_id=160071`): Steps 1 and 3.
+- Proof screenshots are saved at `data/local/semi-autonomous/receipts/round7-sent-mobile-app-sms-added-20260505.png`, `round8-sent-mobile-app-sms-added-20260505.png`, `round9-sent-mobile-app-sms-added-20260505.png`, and `round10-sent-mobile-app-sms-added-20260505.png`.
+- The old regular SMS actions remain present in Round 7-10; they have not been disabled or deleted.
+- Remaining member-experience implementation: save the 20 credit-tip Mobile App SMS actions in DF at 3 and 10 days after each round sent, create owner-review/internal task actions for problem conditions, verify Rounds 5-10 score-update Mobile App SMS coverage, and run one controlled test profile.
+- Tried to save the first credit-tip delayed step in Round 1 (`autofox_id=160038`) using `Start = Delay`, `Interval Type = Days`, and `Interval Value = 3`. DF returned `Something went wrong`; after recovery and reload the in-app browser returned to the DF login page. Receipt: `data/local/semi-autonomous/receipts/autofox-credit-tip-delay-save-attempt-20260505.md`.
+- The Problem / Owner Review lane is now designed locally. The command center writes `data/local/command-center/fundz-autofox-owner-review-actions.md` and `data/local/command-center/fundz-autofox-owner-review-actions.csv` with eight internal task actions and safe member-facing holding copy where appropriate.
+- Live DF work is currently blocked until Brandon logs back into DF/Pulse in the in-app browser.
+- May 6 AutoFox local recheck: `make daily-board` was refreshed and the command-center missing-steps recheck now uses Erika proof receipts instead of hardcoding the one-member app-communication pilot as blocked. Current missing-steps recheck: 5 blocked, 3 review, and 2 pass. The app-communication pilot is now `review` pending app/portal visibility proof.
+- The clean app/email rollout plan was updated to include Anthony Williams's clean-campaign App SMS failure and the current finding that Mobile App SMS should be treated as safe only when DF shows `Installed` / `Logged In`. No live DF/AutoFox browser action or client send was performed during this recheck.
+- May 6 Erika-only DF/Pulse proof check: Erika's admin-side app readiness is positive (`Installed 05/04/26` and `Logged In`), with proof at `data/local/semi-autonomous/receipts/erika-df-app-status-installed-logged-in-proof-20260506.png`. A Portal Messages history search returned `0 results` for `Erika Jordan`, but Brandon clarified the target was App SMS/Mobile App SMS rather than Portal Messages. Treat that portal search as a wrong-surface check only; it does not disprove the DF Mobile App SMS success.
+- May 6 Erika App SMS/App Message visibility proof is now cleared. Erika's DF `Messages` tab / `Communications Center` / `All Messages` table shows two `App Message` rows from `Workflow`, both marked `Sent`, while the same page shows `App Status: Installed 05/04/26` and `Logged In`. Proof screenshot: `data/local/semi-autonomous/receipts/erika-app-message-history-sent-proof-20260506.png`; receipt note: `data/local/semi-autonomous/receipts/erika-app-message-history-sent-proof-20260506.md`. No campaign assignment, no send, no edit was performed.
+- The local command center now recognizes the Erika App Message visibility receipt. `data/local/command-center/fundz-missing-steps-recheck.md` now marks `Credit Tracker app visibility proof` and `One-member app-communication campaign pilot` as `pass`, but keeps `Broad outreach rollout` blocked. Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 28 tests, `make test` ran 124 tests, and `sh scripts/check-memory.sh` passed.
+- May 6 read-only DF/Pulse candidate check found one eligible Installed / Logged In client for the next one-client test. Bianca Alexander showed only `Invitation Sent On 08/08/25`; Don Dupre showed only `Invitation Sent On 07/15/25`; Henry Fisher Sr. showed `Installed 07/30/25` and `Logged In`. Proof screenshot: `data/local/semi-autonomous/receipts/henry-fisher-app-status-installed-logged-in-proof-20260506.png`; receipt note: `data/local/semi-autonomous/receipts/henry-fisher-installed-logged-in-readiness-proof-20260506.md`. No campaign assignment, send, or client edit was performed.
+- Live Supabase/Postgres memory implementation now exists in code:
+  - `db/migrations/001_live_memory.sql`
+  - `scripts/fundz_postgres_memory.py`
+  - `tests/test_fundz_postgres_memory.py`
+- The live memory schema has been applied to the active Supabase `logic-memory` project through the SQL editor. Supabase returned `Success. No rows returned`, and the run used the safer `Run and enable RLS` option.
+- With Brandon's approval, the full local client-memory payload was synced into Supabase `logic-memory` through dashboard SQL chunks because no database password/connection string was available locally.
+- Supabase verification now returns 357 total client-memory rows, 180 active client rows, 180 active-client view rows, and 1 dashboard sync snapshot marker.
+- The Supabase dashboard sync fallback is now repeatable from the repo: `scripts/fundz_postgres_memory.py --sync-operational-state --write-dashboard-chunks data/local/supabase-dashboard-sync` generates ordered dashboard SQL chunks and a final verification query.
+- Supabase dashboard is logged in under A Fund Solution. `logic-memory` is active. `afs-portal` exists but is paused and should not be resumed without Brandon's explicit approval because it changes cloud account state/usage.
+- GitHub Memory Check workflow exists and passes. The repo was made public with Brandon approval, and `main` is protected with required `memory-check`, strict status checks, admin enforcement, force pushes disabled, and branch deletions disabled.
+- HighLevel inbox poller read mode is no longer blocked by `401`; live sending remains intentionally off until Brandon approves client-facing replies.
+- HighLevel workaround is now implemented: exported/copied business-only conversation rows can be dropped into `data/local/highlevel-inbox-manual-imports/` and classified with `make highlevel-inbox-workaround`. This writes `data/local/highlevel-inbox-poller/manual-inbox-workaround.csv` and `.md` without sending replies.
+- HighLevel inbox poller read access is now working after the `View Conversations - conversations.readonly` scope was added. Latest preview poll returned HTTP `200`, fetched 5 conversations, handled 1 real inbound reply, ignored 4 empty-body conversations, and sent 0 messages.
+- The HighLevel classified reply queue is now deduped and excludes empty-body conversations. Erika Jordan's "credit score changed" question is in the Work Queue as `Proof Needed`, requiring Credit Tracker/DisputeFox/report proof before any response.
+- Erika Jordan's score/report evidence was verified from local records and a precise HighLevel SMS reply was sent. Verified facts used: In Dispute, Round 1 Sent 04/17/26, next import 18 days, 38 items in dispute, 0 deleted, 0 repaired. HighLevel accepted the reply with HTTP `201`; receipt is `data/local/highlevel-inbox-poller/reply-receipts.jsonl`. The generated Work Queue now marks that HighLevel client-reply row `Sent`.
+- A signed test-only webhook probe is now implemented and verified. `make webhook-probe` POSTs to `https://fundz.afundsolution.com/credit-tracker/webhook` with `fundz_test_only=true`, validates the public route/shared secret/payload handling, returns HTTP `200`, and does not send a client-facing message.
+- Permanent Cloudflare named tunnel is now live. Latest `cloudflared tunnel list` shows `fundz-credit-tracker` with active DFW connections, and DNS points `fundz.afundsolution.com` to the tunnel.
+- First FUNDz Power-Up implementation pass is complete locally:
+  - `scripts/fundz_command_center.py` and `make command-center` now generate a daily operator report.
+  - Current command-center outputs live under `data/local/command-center/` and include the Markdown report, JSON report, and contact ledger CSV.
+  - Latest command-center baseline: 180 active clients, 79 owner-review-before-message, 1 no-recent-contact-found, 66 draft-for-approval, 35 monitor, and AutoFox snapshot of 5,488 outbound records, 251 failures, 99 possible duplicates, and 36 after-hours records.
+  - HighLevel inbox polling now classifies inbound replies into cancel, complaint, billing, document request, question, or no-action and writes a local classified reply queue.
+  - Semi-autonomous live pilot/batch sends now block on weekends and outside 9 AM - 9 PM local time unless `FUNDZ_ALLOW_AFTER_HOURS_SENDS=true` is explicitly set.
+  - The command center now also writes pilot status, weekly owner summary, and pre-send release checklist outputs.
+  - Pilot status currently shows 5 of 5 app/SMS provider receipts, 5 of 5 email receipts, 0 app/portal visibility confirmations, 0 replies seen, and 5 unresolved clients because app visibility is still unconfirmed.
+  - Semi-autonomous drafts now use deterministic phase-based template rotation and include priority scores/message phase labels.
+  - Batch previews now support `safe_expansion`, `tiny_pilot`, `urgent_action_needed`, and `long_running_stable` presets.
+  - Command center now writes drilldown CSVs for owner-review clients, no-recent-contact exceptions, and next safe batch candidates.
+  - Command center now writes `fundz-owner-review-packet.md`; latest grouping is 22 billing attention, 7 missing next import, and 50 onboarding/setup.
+  - Command center now writes `fundz-owner-decision-queue.csv` and `fundz-owner-decision-packet.md`; latest decision grouping is 50 onboarding/setup follow-ups, 22 billing-review-before-outreach decisions, and 7 import/round confirmation decisions.
+  - Command center now writes `fundz-gap-closure-plan.md` and `fundz-no-approval-work-queue.csv`, showing completed/partial/blocked backlog areas and safe local work.
+  - Command center now writes `fundz-missing-steps-recheck.md`; latest recheck shows 7 blocked items, 2 review items, and 1 pass.
+  - Command center now writes an AutoFox Mobile App SMS migration checklist.
+  - Command center now writes the four-lane AutoFox member experience system and a Round 1 through Round 10 credit-tip CSV.
+  - Command center now writes the AutoFox Problem / Owner Review action catalog and CSV.
+  - ScoreFusion billing dashboard now writes `billing-risk-queue.csv` and command center includes ScoreFusion billing risk counts.
+  - Latest ScoreFusion run for May 5, 2026: 246 enrolled, 246 owed payments, $6,073.83 total amount due, 154 exceptions.
+- FUNDz / Governor / LOGIC Operating System v2 is implemented locally and seeded into Google Sheets:
+  - `make daily-board` now regenerates the command center and prints the five-line board.
+  - The command center now writes the queue-first outputs: `fundz-daily-board.md`, `fundz-work-queue.csv`, `fundz-work-queue-google-sheet-import.csv`, `fundz-governor-safe-fixes.md`, and `fundz-governor-alerts.csv`.
+  - Current Work Queue status baseline is 182 rows: 169 Blocked, 10 Hold, 1 Needs Brandon, 1 Proof Needed, 0 Failed, 0 Approved, 0 Sent, and 1 Done.
+  - Governor is now documented as an aggressive-safe watchdog: it may correct safe statuses, missing owner/due/next-step/proof fields, duplicates, stale work, and alerts, but cannot send client messages, edit client records, change billing, disable live AutoFox actions, override DND/opt-out, change dispute strategy, or use live credentials in new ways without Brandon approval.
+  - The system now enforces the operating rules in generated output: Definition of Done, No Browser Without Queue Row, One Active Objective, proof gates, owner holds, App SMS failure gating, stale-work surfacing, and weekly owner summary counts.
+  - Shared workbook `LOGIC + FUNDz Work Orders` now has refreshed `Daily Board` and `Work Queue` tabs. The current full imported native Google Sheet is `https://docs.google.com/spreadsheets/d/1CQuJFW2c7NHhar3Tx6Fv-ynGcUPzVatxC4OzSJ39OaY`.
+  - LOGIC now answers FUNDz daily board requests, work queue questions, Brandon/BOSS owner aliases, and dispute/client operational questions behind the existing Slack report/admin permission checks.
+- The Client Communication Control Board is now implemented locally and regenerated by `make command-center` / `make daily-board`:
+  - Markdown board: `data/local/command-center/fundz-client-communication-control-board.md`.
+  - CSV board: `data/local/command-center/fundz-client-communication-control-board.csv`.
+  - The board combines the contact ledger, Work Queue status, Brandon owner decisions, full 180 reconciliation, and known App SMS failure evidence.
+  - Current board baseline: 180 active client rows, with 168 Blocked, 10 Hold, 1 Needs Brandon, and 1 Done.
+  - Lane baseline: 107 Round Updates, 41 Onboarding, and 32 Problem / Owner Review.
+  - The board conservatively marks Mobile App SMS as unsafe unless DF app status shows Installed / Logged In; email is shown only as approval/proof-gated fallback or companion.
+- Brandon's AutoFox message audit workbook is available at `outputs/autofox-audit/fundz-autofox-message-audit-birds-eye-view.xlsx`.
+  - It gives a bird's-eye view by send day, round/stage, method, and status bucket, plus a row-level `All Messages` audit and source-limit notes.
+  - It uses the latest local normalized outbound audit, DF email/SMS exports, active-client stage data, the May 5 Download Mobile App sequence receipt, and May 5 app/SMS proof receipts.
+  - Key data caveat: the DF SMS export contains thousands of SMS rows but does not expose sent day, message body, workflow/campaign, or status, so those fields remain marked unknown in the workbook.
+- The Download Mobile App app-readiness bucket workbook is available at `outputs/autofox-audit/fundz-download-mobile-app-readiness-buckets.xlsx`.
+  - Local proof split: 1 Installed / Logged In (`Erika Jordan *New`), 1 Invitation Sent / not installed (`Anthony Williams`), and 178 Unknown / failed / regular SMS only.
+  - Operational meaning: Mobile App SMS is safe only for the proven installed/logged-in bucket after normal gates; invitation-only and unknown clients should use email/app-invite follow-up or DF app-status review first.
+- Brandon's May 7, 2026 $2,000 revenue sprint kit is available:
+  - Workbook: `outputs/revenue-sprint/fundz-2000-tomorrow-revenue-sprint.xlsx`
+  - Quick plan: `outputs/revenue-sprint/fundz-2000-tomorrow-revenue-sprint.md`
+  - The workbook prioritizes 100 targets from warm FUNDz sources, separates top closers and quick wins, includes scripts, and lays out a day plan.
+  - The sprint is manual-call/email first and explicitly blocks automated broad SMS.
+  - Double-check completed: Anthony Williams is excluded from the sprint tabs, and `Top Closers` now starts with $1,000 targets.
+- Personal phone business-message import is now implemented and ran successfully after Full Disk Access was granted. `make personal-phone-queue` writes `data/local/command-center/fundz-personal-phone-message-queue.csv` and a summary from Mac Messages rows matching known FUNDz client names, known client phone numbers, or approved business keywords only. The May 6 iMessage/Messages safety fix now excludes short-code security-code texts before queue output and treats unknown keyword-only inbound rows as review-only instead of automatic `Needs Reply`. Current output: 18 queue rows, 3 inbound, 1 true Needs Reply, and 15 outbound/Review.
+- The personal-phone triage has been refreshed in `data/local/command-center/fundz-personal-phone-needs-reply-triage.md` and `.csv` with sanitized summaries only. Recommendation: move 0 rows automatically; treat 2 rows as false-positive/no-company-action; hold 1 Travis Vance historical-client phone match for Brandon decision. A sanitized candidate row exists at `data/local/command-center/fundz-personal-phone-work-queue-candidates.csv`.
+- The FUNDz Intake Governor is now implemented as a safe intake layer, not a separate sending bot. `make intake-governor` writes `data/local/command-center/fundz-intake-governor.md`, `.json`, `fundz-intake-governor-candidates.csv`, and `fundz-intake-governor-alerts.csv`. Current read: 1 approval-gated Travis Vance candidate, 0 auto-create candidates, 10 compressed alerts, and no personal-phone message body exposed.
+- The Intake Governor now has a local visual dashboard generated by `make intake-governor-visual`: `data/local/command-center/fundz-intake-governor-dashboard.html`. It shows sources, safety gate, approval candidates, compressed alerts, Work Queue status bars, and safety rules.
+- Phone App Intake is now implemented for productivity/money signals across approved phone app sources. `make phone-app-intake` writes `data/local/command-center/fundz-phone-app-intake.md`, `.json`, `.csv`, `fundz-phone-app-intake-registry.md`, and `fundz-phone-app-intake-dashboard.html`. Current read: 19 intake rows, 8 revenue/money signals, 1 risk signal, 3 approval-needed items, and an approved app registry for Messages, Phone/Voicemail/Call Recordings, Notes, Photos/Screenshots, Gmail/Mail, Calendar, Slack, and business-only payment exports.
+- Brandon instructed Codex to ignore Anthony Williams for the current operating cycle. A local suppression row exists at `data/local/command-center/fundz-work-queue-suppressions.csv`; command-center regeneration now marks Anthony `Done` with `operator_suppression` instead of making him the Daily Board next action. Current Daily Board next action is to use the HighLevel manual inbox workaround while the token-scope blocker remains.
+- Credit Tracker bridge logging is now hardened so a failed write to `logs/credit-tracker-bridge.jsonl` cannot crash webhook handling. The bridge was restarted with `/usr/bin/python3`; local health, public Cloudflare health, and `make webhook-probe` all pass. The final live Credit Tracker/AutoFox webhook is still not wired.
+- OpenClaw iMessage owner-command fallback is now implemented and running. The May 6 iMessage screenshot was caused by OpenClaw model-provider failure: the iMessage bridge received the owner text, but OpenRouter returned `402 Insufficient credits`. OpenClaw was switched toward `openai-codex/gpt-5.4-mini` and the gateway was restarted, but direct agent testing still returned a provider endpoint/DNS failure. `scripts/fundz_imessage_fallback.py` now scans failed FUNDz iMessage turns, confirms the sender is owner-allowlisted, and answers only `/new`/reset and stored client update/status requests. A LaunchAgent runs it every 30 seconds, and the missed Dedrick Williams update was sent successfully to Brandon's owner number suffix `9919` at 2026-05-06 15:38 CDT.
+- Local-first AI brain is now implemented for FUNDz owner questions. `scripts/fundz_ai_router.py` routes to local tools / local Ollama first and only uses paid/cloud AI when enabled and allowed by the privacy gate.
+- Local Ollama is installed and running as a Homebrew service, and `llama3.2:3b` is pulled for local owner-question answers.
+- Paid AI remains disabled by default. Sensitive client, money, credit, phone, email, inbox, payment, or dispute prompts are blocked from paid AI by default even if the prompt asks to approve paid AI.
+- The iMessage fallback now supports Daily Board / What's Next owner commands and local-AI free-form owner questions after checking the sender allowlist first. It also caps retry attempts for failed iMessage sends.
+- Verification for this pass: FUNDz `make test` passed 117 tests after the local-first AI router, iMessage fallback expansion, and iMessage/Messages intake safety fixes; prior LOGIC `python3 -m unittest discover -s tests -q` passed 210 tests.
+- A full Python Tests GitHub Actions workflow exists at `.github/workflows/tests.yml`, and `make test` runs the local unit suite. Branch protection currently still requires only `memory-check`; the Python Tests status should be added after the workflow runs once.
 
 ## Known Risks
 
 - Existing uncommitted FUNDz project changes should not be swept into a memory-system commit without Brandon's explicit approval.
 - `make handoff` commits all local changes by design, so use it only after confirming the worktree is ready to commit.
 - Existing uncommitted FUNDz work remains present and should be reviewed before using `make handoff`.
+- Cloudflare is now a permanent named tunnel at `https://fundz.afundsolution.com`; keep the local bridge and tunnel sessions running until this is converted into a LaunchAgent/service.
+- The HighLevel API inbox fallback is blocked by the current token missing conversation-read scope, but the manual inbox workaround is code-ready and tested for exported/copied inbox rows.
+- Do not wire the final webhook into Credit Tracker/AutoFox/DisputeFox until Brandon approves the live step after a clean `make webhook-probe`; the latest probe is clean, but live wiring has not been performed.
+- Live Supabase/Postgres memory is synced, but future command-line syncs still need a real Supabase/Postgres URL added locally if Brandon wants to avoid dashboard SQL chunks.
+- The repo is now public, so code/history visibility has changed. Avoid committing secrets or local data, and review public-facing changes carefully.
+- Routine outreach must stay approval-gated until the AutoFox failures/duplicates/after-hours rows are reviewed and a 3 to 5 member Credit Tracker/app pilot is accepted.
+- High-touch outreach should still avoid weekends unless explicitly approved, stay inside the 9 AM to 9 PM Central contact window, avoid repeated wording, and respect DND/opt-out/deliverability rules.
+- Pilot follow-up now depends on monitoring replies and conversation-history visibility across both Credit Tracker/app and email for all five pilot members.
+- Credit Tracker app/portal visibility now has DF-side proof for fresh Mobile App SMS sends, the `FUNDz App Communication Notice - Email SMS App` redirect campaign, and Erika's client `Messages` / `All Messages` App Message history showing Workflow `Sent` rows. Direct user-side app confirmation is still useful if Brandon wants it, but the admin-side App SMS/App Message visibility proof for Erika is no longer pending. The remaining DF gap is for existing clients already inside old running workflows: Erika's retro-added Round 1 `App SMS Sent` actions stayed `In-Progress`.
+- Brandon clarified the May 6 portal-message search was aimed at the wrong surface: the relevant DF surface is App SMS/Mobile App SMS, not Portal Messages. The Portal Messages `0 results` proof should not be counted as an App SMS failure.
+- The app-communication redirect campaign one-member pilot assignment completed for Erika Jordan: Mobile App SMS and Email succeeded; regular SMS failed as expected. Brandon requested removing the regular SMS action; DF did not remove it after delete confirmation and refresh, so the regular SMS action was paused and the AutoFox was saved.
+- A clean manual app/email-only DF AutoFox campaign is now active for controlled rollout: `FUNDz App Main Communication Notice - App Email Only` (`autofox_id=1638487`). It has instant Step 1 `Use Credit Tracker App for Updates` with Mobile App SMS and Email only; no regular SMS action is included. Proof screenshot: `data/local/semi-autonomous/receipts/app-main-communication-app-email-only-ready-20260505.png`.
+- A rollout readiness note exists at `data/local/command-center/fundz-app-main-communication-rollout-plan.md`. The system is technically set up for a controlled test/batch, but broad outreach to all 180 active clients is still blocked pending app visibility confirmation, reply-monitoring readiness, owner-review exclusions, and Brandon's fresh action-time approval.
+- Broad outreach remains blocked after the Erika proof. The next client-facing action must be only one explicitly approved Installed / Logged In test client with the exact campaign/action target named; no campaign assignment should be clicked from a vague approval.
+- Henry Fisher Sr. is now the first freshly verified candidate for that one-client test, but he still needs exact action-time approval by name before any AutoFox assignment.
+- Brandon reviewed all 79 owner-review clients: 69 approved and 10 held. Held clients are `Tiffany Washington *New`, `Vera Davis *New`, `Vicky Cusher`, `Catherine Brown`, `Tiffany White`, `Test FUNDz Alpha`, `Test FUNDz Bravo`, `Raquel Dawson`, `Akeila Francis`, and `Kenyetta Martin`. Decision record: `data/local/command-center/fundz-owner-approval-decisions-20260505.md`.
+- Brandon approved starting sends. The clean campaign was assigned to Anthony Williams only. DF showed `FUNDz App Main Communication Notice - App Email Only - Just now`, but `App SMS Sent` failed while `Email Sent` was still in progress, so broad rollout was stopped immediately. Anthony's client panel showed `App Status: Send Invitation`, which may be the app-channel blocker. Send log: `data/local/semi-autonomous/receipts/app-email-rollout-send-log-20260505.md`.
+- Anthony's Mobile App invitation email was sent successfully. DF changed Anthony's app status to `Invitation Sent On 05/05/26`, but the clean-campaign `App SMS Sent` action remained failed while Email completed. Current inference: Mobile App SMS may require app acceptance/download/activation, not just sending an invitation.
+- Mobile App SMS troubleshooting confirmed the key difference: Erika Jordan is `Installed 05/04/26` and `Logged In`, and her Mobile App SMS succeeded; Anthony Williams is only `Invitation Sent On 05/05/26`, and his Mobile App SMS failed. Troubleshooting note: `data/local/semi-autonomous/receipts/app-sms-troubleshooting-20260505.md`.
+- Brandon clarified he wants all 180 active clients included after the 69 approved group. A full reconciliation exists at `data/local/command-center/fundz-full-180-app-email-rollout-reconciliation-20260505.csv`: 69 owner-approved, 10 owner-held, 100 outside the owner-review bucket, and 1 no-recent-contact/explicit-override item.
+- GOVERNOR has project watch access/instructions through `assistant/governor.md` and `data/local/command-center/fundz-governor-watch-manifest-20260505.md`, including the Anthony Mobile App SMS failure blocker and the relevant rollout files to monitor.
+- The existing DF AutoFox `Download Mobile App` sequence (`autofox_id=522913`) has now been sent/confirmed for the full 180 active-client roster at Brandon's request. Receipt: `data/local/semi-autonomous/receipts/download-mobile-app-sequence-send-log-20260505.csv`. Final tally: 180 active clients accounted for, 11 newly assigned, 169 already present/assigned, and 0 unresolved failures. This sequence includes Email plus regular SMS, so regular-SMS deliverability remains a known risk.
+- The Round 1 through Round 4 score-update AutoFoxes now have matching Mobile App SMS actions wherever regular SMS exists:
+  - Round 1 score update (`autofox_id=160040`)
+  - Round 2 score update (`autofox_id=160042`)
+  - Round 3 score update (`autofox_id=160043`)
+  - Round 4 score update (`autofox_id=160056`)
+  Proof screenshot: `data/local/semi-autonomous/receipts/round1-4-score-update-mobile-app-sms-added-20260505.png`.
+- Removing and re-adding `fundz_portal_touch` can force a tag-added workflow to fire, but removing the tag is a cloud contact edit and requires fresh action-time approval.
+- Command-center outputs are local/ignored operational artifacts. Regenerate them with `make command-center`.
+- Queue-first operating outputs are local/ignored operational artifacts. Regenerate them with `make command-center` or `make daily-board`, then sync/import `data/local/command-center/fundz-work-queue-google-sheet-import.csv` when the shared Google Sheet needs a fresh full queue snapshot.
+- Personal-phone message import is approval-scoped only. Do not broaden it beyond known clients and approved business keywords without fresh Brandon approval.
+- `tiny_pilot` preview was tested and correctly prepared one preview item without live readiness when contact resolution was not requested.
+- ScoreFusion billing-risk output is local/ignored and should be reviewed before any billing-warning campaign changes.
+- No commit was created for the command-center pass because the worktree already contains many unrelated uncommitted/untracked changes; avoid using `make handoff` until the intended commit scope is reviewed.
+- Latest local recheck: bridge health OK locally and publicly through `https://fundz.afundsolution.com/health`; signed webhook probe returns HTTP `200` in test-only mode; HighLevel conversation poll still returns `401`; Python tests pass locally.
+- Brandon asked to shorten the second message in the new-lead signup conversation shown in the May 5, 2026 screenshot. The exact copy was not found in local FUNDz or nearby Trade Line App files, and the HighLevel connector search is blocked by `401`, so no live CRM template was changed. Recommended replacement copy is: "Nice to meet you, {first_name}! To get started, please pull your 3-bureau credit report here: https://biz.afundsolution.com/apply-now" followed by "It's $1 and takes about 5 minutes. Once you finish the signup and identity check, reply DONE and I'll send your scheduling calendar."
+- Brandon also wants a 6-minute no-response reminder if the lead has not replied `DONE`. Recommended reminder copy: "Just checking in, {first_name}. When you finish the quick report signup, reply DONE so I can send your scheduling calendar. Here's the link again: https://biz.afundsolution.com/apply-now"
+- Normal OpenClaw iMessage AI replies remain provider-blocked until either OpenRouter credits are restored or the OpenAI/Codex provider endpoint issue clears. The local fallback now covers owner-allowlisted stored-update commands, Daily Board / What's Next, and simple local-AI owner questions, but it is not a replacement for full client-facing OpenClaw agent behavior.
+- Local AI answers are useful for owner guidance and drafting, but the local `llama3.2:3b` model is smaller and less reliable than a paid frontier model for complex reasoning. Use local first, then paid only for safe/non-sensitive questions or after Brandon deliberately changes the sensitive-data policy.
+- Recent Daily Board / What's Next fallback send attempts hit `imsg rpc exited (code 1)`. The retry cap prevents loops, but the Messages/OpenClaw send path may need separate repair if owner replies stop delivering again.
 
 ## Last Updated
 
-2026-05-03
+2026-05-06
+
+## 2026-05-07 Maintenance Cleanup Snapshot
+
+- Maintenance autopilot ran successfully (cleanup only; no sends approved).
+- Rollout packet remained approval-gated: `approval_required=true`, `live_send_allowed=false`, `selected=0`.
+- Status file: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md`.

@@ -66,6 +66,8 @@ If GitHub and the Google Doc disagree, trust GitHub first and update the Drive c
 
 `make start` prints the required reading order and starter prompt. `make memory-check` validates the memory packet. `make handoff MSG="Clear commit message"` runs the memory check, commits local changes, and pushes the current branch.
 
+`make command-center` builds the local FUNDz operator view from the client brain, semi-autonomous queue, AutoFox audit, recent receipts, bridge/poller logs, and current blockers. Outputs stay local under `data/local/command-center/`.
+
 ## Validation Layer
 
 `scripts/check-memory.sh` validates the required memory files and required `HANDOFF.md` sections. `.github/workflows/memory-check.yml` runs the same check in GitHub Actions on pushes and pull requests.
@@ -74,4 +76,13 @@ Latest verified state: Memory Check passed on `main` after the handoff-system pu
 
 ## App Logic
 
-No app logic was changed while installing this handoff scaffold.
+FUNDz now has local app logic for:
+
+- Credit Tracker bridge/webhook handling with dry-run, signed probe, quarantine, and proposal support.
+- HighLevel inbox/manual-import classification.
+- Command-center, daily-board, Governor safe-fix, and client communication control-board generation.
+- Semi-autonomous batch preview and approval-gated send preparation.
+- ScoreFusion billing-risk reporting and maintenance cleanup.
+- Intake Governor, phone-app intake, local AI router, owner-command fallback, and safe autonomous operator.
+
+Live sends, DF/AutoFox browser edits, campaign assignments, webhook wiring, and owner-command loops remain action-time approval gated.

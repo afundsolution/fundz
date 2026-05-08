@@ -2,9 +2,9 @@
 
 ## Open
 
-- Expand `SYSTEM_MAP.md` with more detail about FUNDz workflows after the handoff scaffold is committed.
-- Consider branch protection that requires the Memory Check workflow.
-- Decide whether to add live Supabase/Postgres memory later.
+- Expand the new command-center report into a weekly owner-facing summary once the daily version is accepted.
+- Add real HighLevel conversation/message read scope so reply classification can run against live inbox data.
+- Add real Supabase/Postgres connection string locally so command-line memory sync can replace dashboard SQL chunks.
 
 ## Done
 
@@ -19,3 +19,9 @@
 - Push the handoff-system commit.
 - Create FUNDz-specific Google Drive backup/reference doc.
 - Verify GitHub Memory Check workflow passed.
+- Add GitHub branch protection requiring Memory Check.
+- Add live Supabase/Postgres memory schema and dashboard chunk sync fallback.
+- Add local FUNDz command-center report and contact ledger.
+- Add HighLevel inbox reply classification.
+- Add live-send time-window guardrails for semi-autonomous pilot and batch sends.
+- Expand `SYSTEM_MAP.md` with the current safe-autonomy and local operating layers.
