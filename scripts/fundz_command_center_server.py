@@ -251,6 +251,68 @@ def render_chip(label: str, value: Any, tone: str = "info") -> str:
     )
 
 
+def list_rows(report: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    rows = report.get(key)
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def count_by(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        label = display_text(row.get(key), "Unknown")
+        counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
+def render_section_title(kicker: str, title: str, detail: str = "") -> str:
+    detail_html = f"<p>{html.escape(detail)}</p>" if detail else ""
+    return (
+        "<div class='section-title'>"
+        f"<span>{html.escape(kicker)}</span>"
+        f"<h2>{html.escape(title)}</h2>"
+        f"{detail_html}"
+        "</div>"
+    )
+
+
+def render_action_tile(title: str, value: Any, detail: str, href: str, label: str, *, tone: str = "neutral", attrs: str = "") -> str:
+    return (
+        f"<a class='action-tile {html.escape(tone)}' href='{html.escape(href, quote=True)}' {attrs}>"
+        f"<span>{html.escape(title)}</span>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        f"<small>{html.escape(detail)}</small>"
+        f"<em>{html.escape(label)}</em>"
+        "</a>"
+    )
+
+
+def render_progress_bars(counts: dict[str, int], *, limit: int = 8) -> str:
+    total = sum(counts.values())
+    if total <= 0:
+        return "<p class='empty'>No rows available yet.</p>"
+    items = []
+    for label, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]:
+        percent = max(2, round((value / total) * 100))
+        items.append(
+            "<div class='bar-row'>"
+            f"<div><strong>{html.escape(label)}</strong><span>{value}</span></div>"
+            f"<div class='bar-track'><span style='width:{percent}%'></span></div>"
+            "</div>"
+        )
+    return f"<div class='bar-list'>{''.join(items)}</div>"
+
+
+def render_mini_stats(stats: list[tuple[str, Any, str]]) -> str:
+    return "".join(
+        "<div class='mini-stat'>"
+        f"<span>{html.escape(label)}</span>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        f"<small>{html.escape(note)}</small>"
+        "</div>"
+        for label, value, note in stats
+    )
+
+
 def render_daily_board(report: dict[str, Any]) -> str:
     rows = report.get("daily_board") if isinstance(report.get("daily_board"), list) else []
     if not rows:
@@ -314,6 +376,98 @@ def render_send_queue(send_queue: list[dict[str, Any]]) -> str:
             "</article>"
         )
     return f"<div class='queue-list'>{''.join(items)}</div>"
+
+
+def render_client_watch(report: dict[str, Any]) -> str:
+    rows = list_rows(report, "communication_control_board")
+    if not rows:
+        return "<p class='empty'>No client communication board has been generated yet.</p>"
+    priority = sorted(
+        rows,
+        key=lambda row: (
+            status_key(row.get("communication_status")) != "warn",
+            str(row.get("client_name") or ""),
+        ),
+    )[:6]
+    cards = []
+    for row in priority:
+        status = display_text(row.get("communication_status"), "Review")
+        cards.append(
+            "<article class='client-card'>"
+            "<div>"
+            f"<strong>{html.escape(display_text(row.get('client_name'), 'Client'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('current_phase')))}</span>"
+            "</div>"
+            f"<span class='pill {status_key(status)}'>{html.escape(status)}</span>"
+            f"<p>{html.escape(display_text(row.get('block_reason') or row.get('next_step'), 'No local action recorded.'))}</p>"
+            "</article>"
+        )
+    return f"<div class='client-grid'>{''.join(cards)}</div>"
+
+
+def render_billing_watch(report: dict[str, Any]) -> str:
+    scorefusion = report.get("scorefusion") if isinstance(report.get("scorefusion"), dict) else {}
+    rows = scorefusion.get("billing_risk_review_rows") if isinstance(scorefusion.get("billing_risk_review_rows"), list) else []
+    if not rows:
+        return "<p class='empty'>No billing risk rows available yet.</p>"
+    cards = []
+    for row in [item for item in rows if isinstance(item, dict)][:5]:
+        cards.append(
+            "<article class='billing-row'>"
+            f"<strong>{html.escape(display_text(row.get('client_name'), 'Client'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('risk_level'), 'Review'))}</span>"
+            f"<p>{html.escape(display_text(row.get('next_step') or row.get('review_bucket'), 'Review billing proof.'))}</p>"
+            "</article>"
+        )
+    return f"<div class='billing-list'>{''.join(cards)}</div>"
+
+
+def render_activity_feed(report: dict[str, Any]) -> str:
+    ledger = list_rows(report, "send_ledger")
+    receipts = report.get("receipts") if isinstance(report.get("receipts"), dict) else {}
+    recent = receipts.get("recent_receipts") if isinstance(receipts.get("recent_receipts"), list) else []
+    cards = []
+    for row in ledger[:5]:
+        cards.append(
+            "<li>"
+            f"<strong>{html.escape(display_text(row.get('client_or_lead'), 'Client or lead'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('channel')))} / {html.escape(display_text(row.get('source')))}</span>"
+            f"<small>{html.escape(display_text(row.get('sent_at') or row.get('proof'), 'Local receipt'))}</small>"
+            "</li>"
+        )
+    for row in [item for item in recent if isinstance(item, dict)][:3]:
+        cards.append(
+            "<li>"
+            f"<strong>{html.escape(display_text(row.get('client_name') or row.get('client_or_lead'), 'Receipt'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('kind') or row.get('source')))}</span>"
+            f"<small>{html.escape(display_text(row.get('sent_at') or row.get('proof'), 'Local receipt'))}</small>"
+            "</li>"
+        )
+    if not cards:
+        return "<p class='empty'>No recent local activity rows available.</p>"
+    return f"<ul class='activity-list'>{''.join(cards[:7])}</ul>"
+
+
+def render_file_tiles(token: str) -> str:
+    tiles = (
+        ("Command Center", "Full local report", auth_link("command-center", token)),
+        ("Send Visibility", "What FUNDz sent or may send", auth_link("send-visibility", token)),
+        ("Next Queue", "Previewed messages before approval", auth_link("next-send-queue", token)),
+        ("Work Queue", "All rows behind the hub", auth_link("work-queue", token)),
+        ("Kill Switch", "Current send block state", auth_link("kill-switch", token)),
+        ("JSON", "Raw dashboard data", auth_link("json", token)),
+    )
+    return "".join(
+        "<a class='file-tile' href='{href}'>"
+        "<strong>{title}</strong>"
+        "<span>{detail}</span>"
+        "</a>".format(
+            href=html.escape(href, quote=True),
+            title=html.escape(title),
+            detail=html.escape(detail),
+        )
+        for title, detail, href in tiles
+    )
 
 
 def render_owner_review_panel(rows: list[dict[str, Any]], actions: dict[str, dict[str, Any]]) -> str:
@@ -436,22 +590,50 @@ def render_home(token: str) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     send_queue = report.get("next_send_queue") if isinstance(report.get("next_send_queue"), list) else []
     kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
+    scorefusion = report.get("scorefusion") if isinstance(report.get("scorefusion"), dict) else {}
+    maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
+    memory_freshness = report.get("memory_freshness") if isinstance(report.get("memory_freshness"), dict) else {}
+    work_queue = list_rows(report, "work_queue")
+    comm_rows = list_rows(report, "communication_control_board")
+    send_ledger = list_rows(report, "send_ledger")
     review_rows = owner_review_rows(report)
     review_actions = load_owner_review_actions()
-    queue_status = {}
-    for row in report.get("work_queue", []) if isinstance(report.get("work_queue"), list) else []:
-        status = str(row.get("queue_status") or "Unknown")
-        queue_status[status] = queue_status.get(status, 0) + 1
+    queue_status = count_by(work_queue, "queue_status")
+    lane_counts = count_by(work_queue, "lane")
+    comm_status = count_by(comm_rows, "communication_status")
     allowed_now = sum(1 for row in send_queue if str(row.get("send_allowed_now") or "").lower() == "yes")
-    cards = [
-        ("Live Sends", "Off", "client-facing work is inactive", False),
-        ("Active Clients", summary.get("active_clients", 0), "tracked locally", False),
-        ("Needs Brandon", len(review_rows), "click to review/fix", True),
-        ("Next Messages", len(send_queue), f"{allowed_now} allowed now", False),
-        ("Work Queue", sum(queue_status.values()), "local rows", False),
-        ("Kill Switch", display_text(kill_switch.get("status"), "gated"), "local control", False),
-    ]
-    card_html = "".join(render_metric(label, value, note, review_button=review_button) for label, value, note, review_button in cards)
+    kill_enabled = bool(kill_switch.get("enabled"))
+    live_status = "Blocked" if kill_enabled else "Gated"
+    next_action = next((row for row in report.get("daily_board", []) if isinstance(row, dict) and row.get("label") == "Next Action"), {})
+    blocked = next((row for row in report.get("daily_board", []) if isinstance(row, dict) and row.get("label") == "Blocked"), {})
+    proof = next((row for row in report.get("daily_board", []) if isinstance(row, dict) and row.get("label") == "Proof Required"), {})
+    action_tiles = "".join(
+        (
+            render_action_tile(
+                "Needs Brandon",
+                len(review_rows),
+                "Hold and proof rows ready for review",
+                "#owner-review-panel",
+                "Open review panel",
+                tone="warm",
+                attrs="data-open-owner-review aria-haspopup='dialog'",
+            ),
+            render_action_tile("Queued Messages", len(send_queue), f"{allowed_now} allowed now", "#next-queue", "Preview queue", tone="sky"),
+            render_action_tile("Kill Switch", live_status, display_text(kill_switch.get("reason"), "Local control ready"), auth_link("kill-switch", token), "Open control file", tone="rose"),
+            render_action_tile("Work Queue", len(work_queue), "Every local row behind the hub", auth_link("work-queue", token), "Open CSV", tone="mint"),
+        )
+    )
+    card_html = "".join(
+        render_metric(label, value, note, review_button=review_button)
+        for label, value, note, review_button in (
+            ("Live Sends", "Off", "client-facing work is inactive", False),
+            ("Active Clients", summary.get("active_clients", 0), "tracked locally", False),
+            ("Needs Brandon", len(review_rows), "click to review/fix", True),
+            ("Next Messages", len(send_queue), f"{allowed_now} allowed now", False),
+            ("Work Queue", sum(queue_status.values()), "local rows", False),
+            ("Kill Switch", display_text(kill_switch.get("status"), "gated"), "local control", False),
+        )
+    )
     chips = "".join(
         (
             render_chip("Mode", "Inactive", "good"),
@@ -464,6 +646,22 @@ def render_home(token: str) -> str:
     daily = render_daily_board(report)
     top_actions = render_top_actions(report)
     queue = render_send_queue(send_queue)
+    client_watch = render_client_watch(report)
+    billing_watch = render_billing_watch(report)
+    activity_feed = render_activity_feed(report)
+    file_tiles = render_file_tiles(token)
+    health_stats = render_mini_stats(
+        [
+            ("Client rows", len(comm_rows) or summary.get("active_clients", 0), "communication board"),
+            ("Local receipts", len(send_ledger), "sent or attempted"),
+            ("Billing exceptions", scorefusion.get("exceptions", 0), "ScoreFusion watch"),
+            ("Maintenance", maintenance.get("billing_decisions", 0), "billing decisions"),
+            ("Memory", "Stale" if memory_freshness.get("stale") else "Fresh", "local source files"),
+        ]
+    )
+    queue_bars = render_progress_bars(queue_status)
+    lane_bars = render_progress_bars(lane_counts)
+    comm_bars = render_progress_bars(comm_status)
     owner_review_panel = render_owner_review_panel(review_rows, review_actions)
     owner_review_script = render_owner_review_script()
     generated = html.escape(str(report.get("generated_at") or "not generated"))
@@ -474,15 +672,18 @@ def render_home(token: str) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FUNDz Command Center</title>
   <style>
-    :root {{ color-scheme: light; --ink:#172026; --muted:#64737b; --line:#d9e2e5; --paper:#ffffff; --wash:#f5f8f8; --mint:#dff7ea; --mint-ink:#115e3b; --gold:#fff0c7; --gold-ink:#7a4f00; --sky:#e3f2ff; --sky-ink:#075985; --rose:#ffe3dc; --rose-ink:#9f2f1f; }}
+    :root {{ color-scheme: light; --ink:#172026; --muted:#65737a; --line:#d8e2e6; --paper:#ffffff; --wash:#f4f7f6; --deep:#102f3a; --mint:#dff7ea; --mint-ink:#115e3b; --gold:#fff0c7; --gold-ink:#7a4f00; --sky:#e3f2ff; --sky-ink:#075985; --rose:#ffe3dc; --rose-ink:#9f2f1f; --lav:#ece7ff; --lav-ink:#4c3292; }}
     * {{ box-sizing:border-box; }}
-    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#f7fbfb 0,#fff 320px); }}
-    header {{ padding:28px 28px 20px; border-bottom:1px solid var(--line); background:var(--paper); }}
-    h1 {{ margin:0; font-size:28px; letter-spacing:0; }}
-    h2 {{ font-size:18px; margin:0 0 12px; }}
+    html {{ scroll-behavior:smooth; }}
+    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:#f7f9f8; }}
+    header {{ padding:22px 28px 18px; border-bottom:1px solid var(--line); background:linear-gradient(135deg,#ffffff 0,#f4fbf8 52%,#fff6dc 100%); }}
+    h1 {{ margin:0; font-size:34px; letter-spacing:0; }}
+    h2 {{ font-size:18px; margin:0; }}
     p {{ line-height:1.45; }}
-    main {{ padding:22px 28px 40px; max-width:1220px; }}
-    .hero {{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:end; }}
+    main {{ padding:20px 28px 44px; max-width:1360px; }}
+    .hero {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,420px); gap:18px; align-items:stretch; }}
+    .hero-card {{ border:1px solid rgba(16,47,58,.14); background:rgba(255,255,255,.78); border-radius:8px; padding:18px; box-shadow:0 12px 36px rgba(16,47,58,.08); }}
+    .eyebrow {{ margin:0 0 6px; color:var(--sky-ink); font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:0; }}
     .sub {{ margin:8px 0 0; color:var(--muted); max-width:760px; }}
     .chips {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }}
     .chip,.pill {{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 10px; font-size:13px; border:1px solid var(--line); white-space:normal; }}
@@ -491,9 +692,12 @@ def render_home(token: str) -> str:
     .warn {{ background:var(--gold); color:var(--gold-ink); border-color:#efd78f; }}
     .info {{ background:var(--sky); color:var(--sky-ink); border-color:#bddff8; }}
     .rose {{ background:var(--rose); color:var(--rose-ink); border-color:#f2c4bb; }}
-    .links {{ display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }}
-    .links a {{ border:1px solid var(--line); border-radius:6px; padding:8px 10px; color:#0f4f77; text-decoration:none; background:#fff; font-size:14px; }}
-    .metrics {{ display:grid; grid-template-columns:repeat(6,minmax(140px,1fr)); gap:12px; margin:18px 0; }}
+    .lav {{ background:var(--lav); color:var(--lav-ink); border-color:#d9d0ff; }}
+    .links,.hub-nav {{ display:flex; flex-wrap:wrap; gap:8px; }}
+    .links {{ justify-content:flex-end; }}
+    .links a,.hub-nav a,.button {{ border:1px solid var(--line); border-radius:6px; padding:8px 10px; color:#0f4f77; text-decoration:none; background:#fff; font-size:14px; font-weight:700; }}
+    .hub-nav {{ position:sticky; top:0; z-index:20; padding:10px 28px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.94); backdrop-filter:blur(12px); }}
+    .metrics {{ display:grid; grid-template-columns:repeat(6,minmax(140px,1fr)); gap:12px; margin:16px 0; }}
     .metric {{ border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:14px; min-height:92px; }}
     .metric span {{ display:block; color:var(--muted); font-size:13px; }}
     .metric strong {{ display:block; margin-top:8px; font-size:22px; word-break:break-word; }}
@@ -501,8 +705,24 @@ def render_home(token: str) -> str:
     .metric em {{ display:block; margin-top:8px; color:var(--sky-ink); font-style:normal; font-weight:700; font-size:13px; }}
     .metric-button {{ cursor:pointer; text-align:left; font:inherit; color:inherit; text-decoration:none; display:block; }}
     .metric-button:hover,.metric-button:focus {{ border-color:#8cc7ee; box-shadow:0 0 0 3px rgba(14,116,144,.12); outline:0; }}
-    .grid {{ display:grid; grid-template-columns:1.1fr .9fr; gap:16px; align-items:start; }}
+    .action-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; }}
+    .action-tile {{ display:grid; gap:8px; min-height:142px; border:1px solid var(--line); border-radius:8px; padding:16px; background:#fff; color:var(--ink); text-decoration:none; box-shadow:0 8px 24px rgba(16,47,58,.06); }}
+    .action-tile span {{ color:var(--muted); font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:0; }}
+    .action-tile strong {{ font-size:30px; line-height:1; overflow-wrap:anywhere; }}
+    .action-tile small {{ color:var(--muted); line-height:1.35; }}
+    .action-tile em {{ align-self:end; color:#0f4f77; font-style:normal; font-weight:800; }}
+    .action-tile.warm {{ background:#fffaf0; border-color:#efd78f; }}
+    .action-tile.sky {{ background:#f0f8ff; border-color:#bddff8; }}
+    .action-tile.rose {{ background:#fff4f1; border-color:#f2c4bb; }}
+    .action-tile.mint {{ background:#f0fbf4; border-color:#bee8cf; }}
+    .dashboard-grid {{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(340px,.8fr); gap:16px; align-items:start; }}
+    .split-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }}
+    .three-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }}
     section {{ border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:16px; }}
+    section + section {{ margin-top:16px; }}
+    .section-title {{ display:grid; gap:4px; margin-bottom:12px; }}
+    .section-title span {{ color:var(--sky-ink); font-size:12px; font-weight:800; text-transform:uppercase; }}
+    .section-title p {{ margin:0; color:var(--muted); }}
     .brief-list {{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }}
     .brief-list li {{ display:grid; gap:4px; padding-bottom:10px; border-bottom:1px solid var(--line); }}
     .brief-list li:last-child {{ border-bottom:0; padding-bottom:0; }}
@@ -519,6 +739,29 @@ def render_home(token: str) -> str:
     .data-table {{ width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed; }}
     th,td {{ border-bottom:1px solid var(--line); text-align:left; padding:9px 8px; vertical-align:top; overflow-wrap:anywhere; }}
     th {{ color:var(--muted); font-weight:600; }}
+    .mini-stats {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-top:12px; }}
+    .mini-stat {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; }}
+    .mini-stat span,.mini-stat small {{ display:block; color:var(--muted); font-size:12px; }}
+    .mini-stat strong {{ display:block; margin:5px 0; font-size:20px; }}
+    .bar-list {{ display:grid; gap:10px; }}
+    .bar-row div:first-child {{ display:flex; justify-content:space-between; gap:10px; margin-bottom:5px; font-size:13px; }}
+    .bar-row span {{ color:var(--muted); }}
+    .bar-track {{ height:10px; border-radius:999px; background:#edf2f2; overflow:hidden; }}
+    .bar-track span {{ display:block; height:100%; background:linear-gradient(90deg,#58c39a,#6bb7e6); }}
+    .client-grid,.billing-list,.activity-list {{ display:grid; gap:10px; }}
+    .client-card,.billing-row {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--wash); }}
+    .client-card div {{ display:flex; justify-content:space-between; gap:10px; align-items:start; margin-bottom:8px; }}
+    .client-card div span,.billing-row span {{ color:var(--muted); font-size:13px; }}
+    .client-card p,.billing-row p {{ margin:8px 0 0; color:var(--muted); }}
+    .activity-list {{ list-style:none; margin:0; padding:0; }}
+    .activity-list li {{ border-bottom:1px solid var(--line); padding:0 0 10px; }}
+    .activity-list li:last-child {{ border-bottom:0; padding-bottom:0; }}
+    .activity-list strong,.activity-list span,.activity-list small {{ display:block; }}
+    .activity-list span,.activity-list small {{ color:var(--muted); font-size:13px; margin-top:4px; }}
+    .file-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }}
+    .file-tile {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--wash); color:var(--ink); text-decoration:none; }}
+    .file-tile strong,.file-tile span {{ display:block; }}
+    .file-tile span {{ color:var(--muted); margin-top:4px; font-size:13px; }}
     .review-panel {{ display:none; position:fixed; inset:0; z-index:40; overflow:auto; padding:22px; background:rgba(15,32,39,.42); }}
     .review-panel:target {{ display:block; }}
     .review-dialog {{ width:min(980px,calc(100vw - 28px)); margin:0 auto; border:1px solid var(--line); border-radius:8px; padding:0; color:var(--ink); background:#fff; box-shadow:0 20px 80px rgba(15,32,39,.28); }}
@@ -539,39 +782,100 @@ def render_home(token: str) -> str:
     .review-form select,.review-form textarea {{ width:100%; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; color:var(--ink); }}
     .review-form textarea {{ resize:vertical; min-height:42px; }}
     .save-state {{ color:var(--muted); font-size:13px; align-self:center; }}
-    @media (max-width:980px) {{ .metrics {{ grid-template-columns:repeat(3,1fr); }} .grid,.hero {{ grid-template-columns:1fr; }} .links {{ justify-content:flex-start; }} }}
-    @media (max-width:760px) {{ .review-details,.review-form {{ grid-template-columns:1fr; }} .dialog-top {{ display:grid; }} }}
-    @media (max-width:640px) {{ main,header {{ padding-left:16px; padding-right:16px; }} .metrics {{ grid-template-columns:1fr 1fr; }} .data-table {{ display:block; overflow-x:auto; }} }}
+    @media (max-width:1120px) {{ .action-grid,.mini-stats {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .dashboard-grid,.hero,.three-grid {{ grid-template-columns:1fr; }} .links {{ justify-content:flex-start; }} }}
+    @media (max-width:980px) {{ .metrics,.file-grid {{ grid-template-columns:repeat(3,1fr); }} .split-grid {{ grid-template-columns:1fr; }} }}
+    @media (max-width:760px) {{ .review-details,.review-form {{ grid-template-columns:1fr; }} .dialog-top {{ display:grid; }} .action-grid,.mini-stats {{ grid-template-columns:1fr; }} }}
+    @media (max-width:640px) {{ main,header,.hub-nav {{ padding-left:16px; padding-right:16px; }} .metrics,.file-grid {{ grid-template-columns:1fr 1fr; }} .data-table {{ display:block; overflow-x:auto; }} h1 {{ font-size:28px; }} }}
   </style>
 </head>
 <body>
   <header>
     <div class="hero">
-      <div>
+      <div class="hero-card">
+        <p class="eyebrow">Safe autonomous hub</p>
         <h1>FUNDz Command Center</h1>
         <p class="sub">Friendly safe-mode view. FUNDz is awake for local reporting, but inactive for client-facing sends, live replies, DF/AutoFox edits, and webhook wiring.</p>
         <div class="chips">{chips}</div>
       </div>
-      <nav class="links">{links}</nav>
+      <div class="hero-card">
+        <p class="eyebrow">Right now</p>
+        <h2>{html.escape(display_text(next_action.get('value'), 'Review the local board'))}</h2>
+        <p class="sub">{html.escape(display_text(blocked.get('value'), 'No current blocker recorded.'))}</p>
+        <div class="chips">
+          {render_chip("Proof", display_text(proof.get('value'), "Required"), "warn")}
+          {render_chip("Generated", generated, "info")}
+        </div>
+      </div>
     </div>
   </header>
+  <nav class="hub-nav">
+    <a href="#mission">Mission</a>
+    <a href="#actions">Actions</a>
+    <a href="#workload">Workload</a>
+    <a href="#next-queue">Next Queue</a>
+    <a href="#clients">Clients</a>
+    <a href="#money">Money</a>
+    <a href="#activity">Activity</a>
+    {links}
+  </nav>
   <main>
-    <div class="metrics">{card_html}</div>
+    <section id="mission">
+      {render_section_title("Snapshot", "Everything important at a glance", "Live work stays gated while the hub shows what needs attention, what is queued, and where the evidence lives.")}
+      <div class="metrics">{card_html}</div>
+      <div class="mini-stats">{health_stats}</div>
+    </section>
+    <section id="actions">
+      {render_section_title("Action deck", "Start here", "Highest-impact queues, controls, and proof surfaces sit at the top.")}
+      <div class="action-grid">{action_tiles}</div>
+    </section>
     {owner_review_panel}
-    <div class="grid">
-      <section>
-        <h2>Now</h2>
+    <div class="dashboard-grid">
+      <div>
+        <section id="today">
+        {render_section_title("Daily board", "Now", "The current local objective and blocker state.")}
         {daily}
+        </section>
+        <section id="next-queue">
+        {render_section_title("Queue preview", "Next queued messages", "Message bodies are visible here; approval gates still decide whether anything can send.")}
+        {queue}
+        </section>
+        <section id="clients">
+        {render_section_title("Client radar", "Communication control board", "The most sensitive client rows are surfaced first so the page feels like a cockpit instead of a spreadsheet.")}
+        {client_watch}
+        </section>
+      </div>
+      <aside>
+        <section id="workload">
+        {render_section_title("Workload", "Queue shape", "Status, lane, and communication counts from the local boards.")}
+        <div class="split-grid">
+          <div>{queue_bars}</div>
+          <div>{lane_bars}</div>
+        </div>
+        </section>
+        <section>
+        {render_section_title("Communication", "Client status mix", "")}
+        {comm_bars}
+        </section>
+        <section id="money">
+        {render_section_title("Money watch", "Billing and cleanup", "ScoreFusion and maintenance rows that can affect outreach readiness.")}
+        {billing_watch}
+        </section>
+      </aside>
+    </div>
+    <div class="three-grid" style="margin-top:16px">
+      <section>
+        {render_section_title("Local actions", "Top local actions", "")}
+        {top_actions}
+      </section>
+      <section id="activity">
+        {render_section_title("Activity", "Recent local receipts", "")}
+        {activity_feed}
       </section>
       <section>
-        <h2>Next Queued Messages</h2>
-        {queue}
+        {render_section_title("Files", "Open the source boards", "")}
+        <div class="file-grid">{file_tiles}</div>
       </section>
     </div>
-    <section style="margin-top:16px">
-      <h2>Top Local Actions</h2>
-      {top_actions}
-    </section>
     <p class="sub">Generated: {generated}. This page can refresh boards and show queues; it does not approve or send anything by itself.</p>
   </main>
   {owner_review_script}

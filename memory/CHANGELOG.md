@@ -2,6 +2,14 @@
 
 ## 2026-05-08
 
+### Command Center Hub Redesign
+
+- Reworked the protected Command Center page into an all-in-one hub with a safe autonomous header, sticky navigation, snapshot metrics, action tiles, Daily Board, next-send previews, client radar, queue/lane/status bars, billing watch, recent local receipts, and source-board file tiles.
+- Kept the page inactive and safe: no client send, HighLevel reply, DF/AutoFox edit, or webhook wiring can be triggered by the hub.
+- Preserved the clickable Needs Brandon review panel and local-only Save Local Fix forms.
+- Added test assertions for the new hub sections.
+- Verified focused command-center tests, full `make test` with 194 tests, `make command-center-domain`, Browser plugin hub/review-panel checks, public owner dashboard rendering, and `TODAY=2026-05-08 make autonomous` with no safety findings.
+
 ### Needs Brandon Review Panel
 
 - Made the protected Command Center `Needs Brandon` metric clickable.
