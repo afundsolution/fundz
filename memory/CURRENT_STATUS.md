@@ -6,25 +6,28 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 
 ## Current State
 
-- FUNDz is currently fun, locally autonomous in safe mode, inactive for live operations, and not sending.
+- FUNDz is currently fun, locally autonomous in safe mode, inactive for client-facing live operations, and not sending.
 - `FUNDZ_SLEEP_MODE.md` is the visible sleep-mode sign for this folder.
 - `make autonomous` runs the safe local autonomous operator once. It refreshes the autonomy review, maintenance autopilot, intake governor, intake dashboard, phone-app intake, command center, and tests while forcing child settings to dry-run/no-live-send mode.
 - `make autonomous-watch` exists, but it only runs if `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` is set locally.
 - Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly to run the safe operator from this workspace.
 - Brandon explicitly requested both local LaunchAgents enabled. `com.afundsolution.fundz-autonomous-operator` is enabled and runs hourly with dry-run/no-live-send settings. `com.afundsolution.fundz-imessage-fallback` is enabled and runs every 30 seconds in live owner-command mode.
 - `make command-center` now includes send visibility: `fundz-send-visibility-command-center.md`, `fundz-send-ledger.csv`, `fundz-next-send-queue.csv`, and `fundz-send-kill-switch.md`.
+- `make command-center-domain` now serves the protected Command Center at `https://fundz-command.afundsolution.com/` through the existing Cloudflare tunnel. The owner URL/token live only in `data/local/command-center/fundz-command-center-domain.json`.
+- `make autonomous` explicitly allows the protected Command Center domain server/tunnel through `FUNDZ_ALLOW_COMMAND_CENTER_DOMAIN_TUNNEL=true` while still flagging live bridge, HighLevel poller, live send, client reply, DF/AutoFox edit, and webhook/client-response runtime.
+- Latest Command Center domain verification: public health returned 200, missing-token dashboard returned 403, bad-token dashboard returned 403, tokenized dashboard returned 200, `TODAY=2026-05-08 make autonomous` passed with 6/6 steps and no safety findings, and `make test` passed 191 tests.
 - The current send visibility board shows 49 local sent/attempted rows, 5 next-send preview rows, and 0 sends allowed now because approval gates still apply.
 - The next-send queue now includes owner text notice status. Current rows are `required_2_min_before_live_send`; no client send can proceed from the semi-autonomous live path until Brandon receives the owner notice and the 120-second lead time is satisfied.
 - `make owner-pre-send-notice` sends the owner-only iMessage notice for the current prepared batch. Receipts write to `data/local/semi-autonomous/receipts/fundz-owner-pre-send-notices.jsonl`.
 - The command-center kill switch control file is `data/local/command-center/fundz-send-kill-switch.json`; setting `"enabled": true` hard-blocks live client/lead sends while local reports continue.
 - Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
-- Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:23 CDT; OK; approval required; live sends disabled).
+- Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 23:03 CDT; OK; approval required; live sends disabled; selected=0).
 - PR #1 was merged at `https://github.com/afundsolution/fundz/pull/1`; branch protection now requires both `memory-check` and `python-tests`.
 - HighLevel inbox preview access is working again in dry-run/preview mode; latest check returned status 200, fetched 5, handled 2, and sent 0.
 - No local Postgres URL is configured; Supabase dashboard SQL chunks are generated under `data/local/supabase-dashboard-sync` when memory sync is needed.
 - `make inactive` is available and was run on May 7, 2026 at 10:37:44 CDT.
 - The inactive run stopped `fundz-bridge` and `fundz-tunnel`, found `fundz-highlevel-poller` already stopped, disabled the `com.afundsolution.fundz-imessage-fallback` LaunchAgent, and wrote `data/local/command-center/fundz-inactive-receipt.md`.
-- Verification after the May 8 LaunchAgent wake: `make autonomous` passed with no safety findings, `launchctl print-disabled` shows both FUNDz LaunchAgents enabled, and both LaunchAgents report last exit code `0`.
+- Verification after the May 8 LaunchAgent wake and Command Center domain allow-list update: `make autonomous` passed with no safety findings, `launchctl print-disabled` shows both FUNDz LaunchAgents enabled, and both LaunchAgents report last exit code `0`.
 - The portable AI handoff scaffold has been added to the FUNDz repo.
 - `AGENTS.md` now tells agents how to start, work safely, and hand off.
 - `memory/` contains the durable context packet for future agents.
@@ -37,7 +40,7 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 
 ## Active Workstream
 
-Safe local autonomy with owner-command fallback awake. Continue local board, intake, maintenance, proposal, and test refreshes through `make autonomous`. Do not continue live-pilot operations, client outreach, webhook work, DF/AutoFox edits, browser actions, or non-owner-command live loops unless Brandon gives exact action-time approval for the specific live step.
+Safe local autonomy with owner-command fallback and protected Command Center domain awake. Continue local board, intake, maintenance, proposal, and test refreshes through `make autonomous`. Do not continue live-pilot operations, client outreach, webhook work, DF/AutoFox edits, browser actions, or non-owner-command live loops unless Brandon gives exact action-time approval for the specific live step.
 
 ## Recently Completed
 

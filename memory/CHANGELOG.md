@@ -2,6 +2,24 @@
 
 ## 2026-05-08
 
+### Command Center Domain
+
+- Added `scripts/fundz_command_center_server.py`, a protected local web dashboard for the FUNDz Command Center.
+- Added `scripts/fundz_command_center_domain_setup.sh` and `make command-center-domain`.
+- Routed `fundz-command.afundsolution.com` through the existing `fundz-credit-tracker` Cloudflare tunnel while preserving `fundz.afundsolution.com` for the webhook ingress.
+- Stored the owner URL/token only in Git-ignored `data/local/command-center/fundz-command-center-domain.json`.
+- Stopped the setup script from printing the private owner token; it now points Brandon to the ignored local token file instead.
+- Updated `make autonomous` and `scripts/fundz_autonomous_operator.py` so the protected Command Center domain server/tunnel is allowed with `FUNDZ_ALLOW_COMMAND_CENTER_DOMAIN_TUNNEL=true`, while live bridge, poller, send, edit, and webhook/client-response runtimes remain gated.
+- Verified local health, public health, token-required 403 behavior, bad-token 403 behavior, tokenized dashboard access, `TODAY=2026-05-08 make autonomous` with no safety findings, `make test` with 191 tests, and `sh scripts/check-memory.sh`.
+- The nested hostname `command.fundz.afundsolution.com` was not used because Cloudflare returned an SSL handshake failure for it; the working domain is `fundz-command.afundsolution.com`.
+- No live client send, HighLevel reply, DF/AutoFox edit, or webhook wiring was performed.
+
+### Maintenance Autopilot Run
+
+- Ran `python3 scripts/fundz_maintenance_autopilot.py --today 2026-05-07 --run-tests` (2026-05-07 23:03 CDT).
+- Result OK (7/7), no safety findings; rollout remains approval-gated (`approval_required=true`, `live_send_allowed=false`, `selected=0`).
+- Updated status and boards: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md`, `data/local/maintenance-cleanup/fundz-maintenance-cleanup-board.md`, `data/local/command-center/fundz-daily-board.md`.
+
 ### Owner Pre-Send Text Notice
 
 - Added a two-minute owner text notice gate for approved semi-autonomous live pilot and batch sends.
