@@ -582,3 +582,14 @@ Read this file first, then read `memory/CURRENT_STATUS.md` and `memory/NEXT_STEP
   - `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md`
   - `data/local/maintenance-cleanup/fundz-maintenance-cleanup-board.md`
   - `data/local/maintenance-cleanup/fundz-duplicate-billing-review.csv`
+
+## 2026-05-08 Maintenance Autopilot (Cleanup Only)
+
+- Ran `python3 scripts/fundz_maintenance_autopilot.py --today 2026-05-08 --run-tests`.
+- Result: OK (7/7 steps), no safety findings (generated 2026-05-08 03:07 CDT).
+- Safety: `approval_required=true`, `live_send_allowed=false`, `selected=0`.
+- Counts: billing rows 195, unique clients 184, archived/excluded 7, bounced routes 1, duplicate-review 57.
+- Outputs:
+  - `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md`
+  - `data/local/maintenance-cleanup/fundz-maintenance-cleanup-board.md`
+  - `data/local/maintenance-cleanup/fundz-duplicate-billing-review.csv`
