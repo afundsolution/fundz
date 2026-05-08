@@ -3,8 +3,8 @@
 ## Open
 
 - Expand the new command-center report into a weekly owner-facing summary once the daily version is accepted.
-- Add real HighLevel conversation/message read scope so reply classification can run against live inbox data.
 - Add real Supabase/Postgres connection string locally so command-line memory sync can replace dashboard SQL chunks.
+- Merge PR #1 after GitHub checks pass.
 
 ## Done
 
@@ -25,3 +25,6 @@
 - Add HighLevel inbox reply classification.
 - Add live-send time-window guardrails for semi-autonomous pilot and batch sends.
 - Expand `SYSTEM_MAP.md` with the current safe-autonomy and local operating layers.
+- Add real HighLevel conversation/message read scope so reply classification can run against live inbox data.
+- Require Python Tests in branch protection.
+- Create recurring Codex automation for safe local autonomy.

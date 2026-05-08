@@ -15,6 +15,17 @@
 - Ran `TODAY=2026-05-08 make autonomous`: passed 6/6 operator steps, had no safety findings, and kept runtime quiet. Maintenance autopilot passed 7/7 including tests.
 - No commit was created because the worktree still contains many unrelated modified/untracked FUNDz changes.
 
+### Publish + Recurring Autonomy
+
+- Direct push to protected `main` was rejected as expected by branch protection.
+- Pushed `codex/fundz-safe-autonomy-operating-system` and opened PR #1.
+- Updated branch protection so `main` requires both `memory-check` and `python-tests`.
+- Fixed CI-only SMS pilot dry-run payload shape by adding an explicit HighLevel-safe pilot SMS template with `contactId`.
+- Created hourly Codex automation `fundz-safe-autonomous-operator` to run the safe operator in this workspace.
+- Verified HighLevel inbox preview mode returned status 200, fetched 5, handled 2, and sent 0.
+- Generated Supabase dashboard SQL chunks under `data/local/supabase-dashboard-sync` because no local database URL is configured.
+- Tried a macOS LaunchAgent for safe autonomy, then removed it because launchd cannot access this Desktop workspace without extra macOS privacy access.
+
 ## 2026-05-07
 
 ### Sleep Mode

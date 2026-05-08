@@ -4,10 +4,12 @@
 
 1. Keep FUNDz in safe local autonomous mode. Use `make autonomous` for local board/intake/maintenance/proposal/test refreshes; do not restart `fundz-bridge`, `fundz-tunnel`, `fundz-highlevel-poller`, the iMessage fallback LaunchAgent, or any live browser/client-send workflow unless Brandon gives exact action-time approval for that specific live step.
 2. Start any future work by reading `FUNDZ_SLEEP_MODE.md`, then `memory/HANDOFF.md`, `memory/CURRENT_STATUS.md`, and this file.
-3. Latest safe autonomy proof: `data/local/autonomy/fundz-autonomous-operator-status.md`; latest run passed 6/6 operator steps, had no safety findings, and kept live sends disabled.
-4. If Brandon only wants the folder to remain parked, run `make inactive` again and verify no `screen` sessions or matching FUNDz runtime processes are running.
-5. If Brandon asks to wake a live piece, first run `make autonomous` or `make daily-board`, review the Work Queue and Client Communication Control Board, then re-enable only the exact runtime or workflow he named.
-6. Current inactive proof: `data/local/command-center/fundz-inactive-receipt.md`; no `screen` sessions remain; `com.afundsolution.fundz-imessage-fallback` is disabled; no matching bridge/tunnel/poller/fallback processes are running.
+3. Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly. Review its output before adding another scheduler.
+4. Latest safe autonomy proof: `data/local/autonomy/fundz-autonomous-operator-status.md`; latest run passed 6/6 operator steps, had no safety findings, and kept live sends disabled.
+5. PR #1 should be merged after `memory-check` and `python-tests` pass: `https://github.com/afundsolution/fundz/pull/1`.
+6. If Brandon only wants the folder to remain parked, run `make inactive` again and verify no `screen` sessions or matching FUNDz runtime processes are running.
+7. If Brandon asks to wake a live piece, first run `make autonomous` or `make daily-board`, review the Work Queue and Client Communication Control Board, then re-enable only the exact runtime or workflow he named.
+8. Current inactive proof: `data/local/command-center/fundz-inactive-receipt.md`; no `screen` sessions remain; `com.afundsolution.fundz-imessage-fallback` is disabled; no matching bridge/tunnel/poller/fallback processes are running.
 
 ## Wake Backlog
 
@@ -49,8 +51,8 @@ The backlog below is preserved for a future wake request. Do not treat it as per
 13. Confirm the five Credit Tracker/app pilot messages are visible in Credit Tracker/HighLevel conversation history.
 14. Confirm the five email companion messages are visible in HighLevel history.
 15. Monitor replies from Anitra Thomas, Ashley Stancil, Brenda Taylor, Deja Eaton, and Jasmine Neeley.
-16. Until HighLevel login/token scope is fixed, export or copy business-only HighLevel conversation rows into `data/local/highlevel-inbox-manual-imports/`, then run `make highlevel-inbox-workaround` so FUNDz can classify needs-reply / needs-Brandon items without API access.
-17. Add conversation/message read scope to the HighLevel Private Integration token when login is available, then rerun `scripts/fundz_highlevel_inbox_poller.py --once --limit 5` so FUNDz can confirm replies and delivery history automatically.
+16. HighLevel inbox preview access is currently working. Continue using preview/dry-run polling for intake verification unless Brandon explicitly approves live replies.
+17. Keep `make highlevel-inbox-workaround` available for exported/copied business-only conversation rows if API access fails again.
 17. Erika's DF App SMS/App Message visibility is confirmed in the admin `Messages` tab: two Workflow `App Message` rows are marked `Sent`, and the profile shows `Installed 05/04/26` / `Logged In`. Direct client-side Credit Tracker app confirmation is optional additional proof, not a blocker for the admin-side proof gate.
 18. Decide how to handle clients already inside old running workflows. Fresh AutoFox Mobile App SMS sends work, but Erika's retro-added Round 1 `App SMS Sent` actions still show `In-Progress`.
 19. Review Erika's app-communication redirect pilot proof before any expansion. DF activity history shows Mobile App SMS success and Email success; the old regular SMS failed as expected. The regular SMS action is paused in the campaign template because DF did not delete it after confirmation.
@@ -78,7 +80,7 @@ The backlog below is preserved for a future wake request. Do not treat it as per
 33. Put the final webhook URL `https://fundz.afundsolution.com/credit-tracker/webhook` into Credit Tracker/AutoFox/DisputeFox only after Brandon approves the live wiring step.
 34. Keep `fundz-bridge` and `fundz-tunnel` running, then convert them to a LaunchAgent/service if Brandon wants always-on startup behavior after reboots.
 35. Watch `logs/credit-tracker-bridge.jsonl` and `logs/cloudflared-fundz.out` after the first real webhook event.
-36. Keep GitHub branch protection verified after major workflow changes; `main` currently requires `memory-check`. The Python Tests workflow exists but is not required yet.
+36. Keep GitHub branch protection verified after major workflow changes; `main` currently requires both `memory-check` and `python-tests`.
 37. Optional future cleanup: add a real Supabase/Postgres connection string to `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` or `SUPABASE_DB_URL` so future live-memory syncs can run by command instead of dashboard SQL chunks.
 38. If a database URL is still unavailable, use `scripts/fundz_postgres_memory.py --sync-operational-state --write-dashboard-chunks data/local/supabase-dashboard-sync` and run the generated SQL chunks in order in Supabase.
 

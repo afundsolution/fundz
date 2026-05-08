@@ -108,6 +108,13 @@ PILOT_EMAIL_TEMPLATE = json.dumps(
         "message": "{message}",
     }
 )
+PILOT_SMS_TEMPLATE = json.dumps(
+    {
+        "type": "{message_type}",
+        "contactId": "{contact_id}",
+        "message": "{message}",
+    }
+)
 
 
 def env_int(name: str, default: int) -> int:
@@ -304,6 +311,8 @@ def pilot_payload(args: argparse.Namespace, message: str) -> dict[str, Any]:
 def configure_pilot_outbound_template(args: argparse.Namespace) -> None:
     if args.pilot_channel == "Email":
         os.environ["CREDIT_TRACKER_OUTBOUND_TEMPLATE"] = PILOT_EMAIL_TEMPLATE
+    else:
+        os.environ["CREDIT_TRACKER_OUTBOUND_TEMPLATE"] = PILOT_SMS_TEMPLATE
 
 
 def configure_channel_outbound_template(channel: str) -> None:
