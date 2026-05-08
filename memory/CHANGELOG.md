@@ -2,6 +2,14 @@
 
 ## 2026-05-08
 
+### Needs Brandon Review Panel
+
+- Made the protected Command Center `Needs Brandon` metric clickable.
+- Added an on-page review panel that shows the current 10 Brandon/Hold/Proof Needed queue items with client, lane, due date, hold reason, next step, proof needed, and evidence.
+- Added local-only decision/note forms for each review item. Saves write to ignored files under `data/local/command-center/` and are marked no-live-send/no-external-edit.
+- Added tests for rendering the review button/panel and for accepting or rejecting local review saves.
+- Verified focused command-center tests, full `make test` with 194 tests, `TODAY=2026-05-08 make autonomous`, memory check, public owner dashboard rendering, Chrome visual panel rendering, and no token in the server log; no client send, HighLevel reply, DF/AutoFox edit, or webhook wiring was performed.
+
 ### Command Center Friendly Inactive UI
 
 - Reworked the protected Command Center web UI into a clearer safe/inactive dashboard with status chips, metric cards, readable Daily Board items, next queued message previews, and top local actions.
