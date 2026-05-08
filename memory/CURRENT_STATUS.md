@@ -14,6 +14,8 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 - Brandon explicitly requested both local LaunchAgents enabled. `com.afundsolution.fundz-autonomous-operator` is enabled and runs hourly with dry-run/no-live-send settings. `com.afundsolution.fundz-imessage-fallback` is enabled and runs every 30 seconds in live owner-command mode.
 - `make command-center` now includes send visibility: `fundz-send-visibility-command-center.md`, `fundz-send-ledger.csv`, `fundz-next-send-queue.csv`, and `fundz-send-kill-switch.md`.
 - The current send visibility board shows 49 local sent/attempted rows, 5 next-send preview rows, and 0 sends allowed now because approval gates still apply.
+- The next-send queue now includes owner text notice status. Current rows are `required_2_min_before_live_send`; no client send can proceed from the semi-autonomous live path until Brandon receives the owner notice and the 120-second lead time is satisfied.
+- `make owner-pre-send-notice` sends the owner-only iMessage notice for the current prepared batch. Receipts write to `data/local/semi-autonomous/receipts/fundz-owner-pre-send-notices.jsonl`.
 - The command-center kill switch control file is `data/local/command-center/fundz-send-kill-switch.json`; setting `"enabled": true` hard-blocks live client/lead sends while local reports continue.
 - Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
 - Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:23 CDT; OK; approval required; live sends disabled).

@@ -9,8 +9,9 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,8 +43,10 @@ PILOT_PACKET = RUN_DIR / "pilot-packet.json"
 BATCH_PACKET = RUN_DIR / "expansion-batch-packet.json"
 BATCH_REPORT = RUN_DIR / "expansion-batch-preview.md"
 BATCH_RECEIPT_DIR = RUN_DIR / "receipts"
+OWNER_PRE_SEND_NOTICE_RECEIPTS = BATCH_RECEIPT_DIR / "fundz-owner-pre-send-notices.jsonl"
 READY_ROLLOUT_PRESET = "capped_ready_rollout"
 BILLING_RISK_REVIEW_CSV = ROOT / "data" / "local" / "scorefusion-billing-dashboard" / "billing-risk-review-queue.csv"
+OPENCLAW = str(Path.home() / ".local" / "bin" / "openclaw")
 
 SAFE_PILOT_MESSAGE = (
     "Hi {first_name}, this is a controlled FUNDz test message. "
@@ -344,6 +347,231 @@ def send_window_status(now: datetime | None = None) -> tuple[bool, str]:
     if now.hour < 9 or now.hour >= 21:
         return False, "live sends are allowed only from 9 AM to 9 PM local time"
     return True, "inside approved live-send window"
+
+
+def owner_pre_send_notice_seconds() -> int:
+    return max(env_int("FUNDZ_OWNER_PRE_SEND_NOTICE_SECONDS", 120), 0)
+
+
+def owner_notice_target() -> str:
+    explicit = os.getenv("FUNDZ_OWNER_NOTIFY_TARGET", "").strip()
+    if explicit:
+        return explicit
+    allowlist = os.getenv("FUNDZ_OWNER_COMMAND_SENDERS", "").strip()
+    if not allowlist:
+        return ""
+    return next((item.strip() for item in allowlist.split(",") if item.strip()), "")
+
+
+def packet_notice_key(packet: dict[str, Any]) -> str:
+    batch_id = str(packet.get("batch_id") or "").strip()
+    if batch_id:
+        return f"batch:{batch_id}"
+    payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+    basis = "|".join(
+        [
+            str(packet.get("mode") or ""),
+            str(payload.get("contact_id") or payload.get("contactId") or ""),
+            str(payload.get("messageType") or ""),
+            str(packet.get("message") or ""),
+        ]
+    )
+    digest = hashlib.sha256(basis.encode("utf-8")).hexdigest()[:12]
+    return f"pilot:{digest}"
+
+
+def packet_notice_rows(packet: dict[str, Any]) -> list[dict[str, str]]:
+    if isinstance(packet.get("items"), list):
+        rows = []
+        for item in packet.get("items", []):
+            if not isinstance(item, dict):
+                continue
+            rows.append(
+                {
+                    "client_name": str(item.get("client_name") or "unknown"),
+                    "channel": str(item.get("channel") or packet.get("channel") or "unknown"),
+                    "subject": str((item.get("outbound_payload_preview") or {}).get("subject") or ""),
+                }
+            )
+        return rows
+    payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+    return [
+        {
+            "client_name": str(payload.get("first_name") or "pilot contact"),
+            "channel": str(payload.get("messageType") or "unknown"),
+            "subject": str(payload.get("email_subject") or ""),
+        }
+    ]
+
+
+def build_owner_pre_send_notice_message(packet: dict[str, Any], wait_seconds: int) -> str:
+    rows = packet_notice_rows(packet)
+    channel_counts: dict[str, int] = {}
+    for row in rows:
+        channel = row["channel"] or "unknown"
+        channel_counts[channel] = channel_counts.get(channel, 0) + 1
+    channels = ", ".join(f"{count} {channel}" for channel, count in sorted(channel_counts.items()))
+    names = ", ".join(row["client_name"] for row in rows[:5])
+    if len(rows) > 5:
+        names += f", +{len(rows) - 5} more"
+    minutes = max(round(wait_seconds / 60), 1) if wait_seconds else 0
+    lead = f"in about {minutes} minute(s)" if wait_seconds else "now"
+    return (
+        f"FUNDz heads-up: {len(rows)} message(s) queued to send {lead}. "
+        f"Channels: {channels or 'unknown'}. "
+        f"Batch/key: {packet_notice_key(packet)}. "
+        f"First: {names or 'none'}. "
+        "Turn on the FUNDz kill switch if this should pause."
+    )
+
+
+def append_owner_pre_send_notice(row: dict[str, Any], path: Path | None = None) -> None:
+    path = path or OWNER_PRE_SEND_NOTICE_RECEIPTS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def read_owner_pre_send_notices(path: Path | None = None) -> list[dict[str, Any]]:
+    path = path or OWNER_PRE_SEND_NOTICE_RECEIPTS
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
+def parse_notice_time(raw: Any) -> datetime | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def owner_pre_send_notice_status(
+    packet: dict[str, Any],
+    now: datetime | None = None,
+    wait_seconds: int | None = None,
+) -> dict[str, Any]:
+    key = packet_notice_key(packet)
+    now = now or datetime.now(timezone.utc)
+    wait_seconds = owner_pre_send_notice_seconds() if wait_seconds is None else wait_seconds
+    matching = [row for row in read_owner_pre_send_notices() if row.get("notice_key") == key]
+    sent_rows = [row for row in matching if row.get("sent")]
+    if not sent_rows:
+        return {
+            "ready": False,
+            "status": "notice_required",
+            "notice_key": key,
+            "wait_seconds": wait_seconds,
+            "reason": "Owner text notice has not been sent yet.",
+        }
+    latest = sent_rows[-1]
+    sent_at = parse_notice_time(latest.get("sent_at") or latest.get("created_at"))
+    if not sent_at:
+        return {
+            "ready": False,
+            "status": "notice_time_unknown",
+            "notice_key": key,
+            "wait_seconds": wait_seconds,
+            "reason": "Owner text notice exists, but its send time is unreadable.",
+        }
+    elapsed = max((now - sent_at).total_seconds(), 0)
+    remaining = max(wait_seconds - int(elapsed), 0)
+    if remaining > 0:
+        return {
+            "ready": False,
+            "status": "notice_waiting",
+            "notice_key": key,
+            "wait_seconds": wait_seconds,
+            "remaining_seconds": remaining,
+            "sent_at": sent_at.isoformat(timespec="seconds"),
+            "reason": f"Owner text notice was sent; wait {remaining} more second(s).",
+        }
+    return {
+        "ready": True,
+        "status": "notice_ready",
+        "notice_key": key,
+        "wait_seconds": wait_seconds,
+        "remaining_seconds": 0,
+        "sent_at": sent_at.isoformat(timespec="seconds"),
+        "reason": "Owner text notice lead time is satisfied.",
+    }
+
+
+def send_owner_notice_text(target: str, message: str, dry_run: bool) -> dict[str, Any]:
+    args = [OPENCLAW, "message", "send", "--channel", "imessage", "--target", target, "--message", message, "--json"]
+    if dry_run:
+        args.append("--dry-run")
+    completed = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, timeout=45, check=False)
+    return {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+        "dry_run": dry_run,
+    }
+
+
+def ensure_owner_pre_send_notice(packet: dict[str, Any], live: bool | None = None) -> dict[str, Any]:
+    status = owner_pre_send_notice_status(packet)
+    if status.get("ready") or status.get("status") == "notice_waiting":
+        return status
+    target = owner_notice_target()
+    if not target:
+        return {
+            **status,
+            "status": "notice_target_missing",
+            "reason": "FUNDZ_OWNER_NOTIFY_TARGET or FUNDZ_OWNER_COMMAND_SENDERS is required before live sends.",
+        }
+    live_notice = env_bool("FUNDZ_OWNER_PRE_SEND_NOTICE_LIVE", True) if live is None else live
+    wait_seconds = int(status.get("wait_seconds") or owner_pre_send_notice_seconds())
+    message = build_owner_pre_send_notice_message(packet, wait_seconds)
+    send_result = send_owner_notice_text(target, message, dry_run=not live_notice)
+    sent = live_notice and send_result.get("returncode") == 0
+    row = {
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "sent_at": datetime.now(timezone.utc).isoformat(timespec="seconds") if sent else "",
+        "notice_key": status["notice_key"],
+        "target_suffix": re.sub(r"\D", "", target)[-4:],
+        "message": message,
+        "sent": sent,
+        "dry_run": not live_notice,
+        "send_result": send_result,
+        "wait_seconds": wait_seconds,
+    }
+    append_owner_pre_send_notice(row)
+    if sent:
+        return {
+            "ready": False,
+            "status": "notice_sent_waiting",
+            "notice_key": status["notice_key"],
+            "wait_seconds": wait_seconds,
+            "remaining_seconds": wait_seconds,
+            "notice_receipts": str(OWNER_PRE_SEND_NOTICE_RECEIPTS),
+            "reason": f"Owner text notice sent; wait {wait_seconds} second(s) before live send.",
+        }
+    return {
+        "ready": False,
+        "status": "notice_send_failed" if live_notice else "notice_dry_run",
+        "notice_key": status["notice_key"],
+        "wait_seconds": wait_seconds,
+        "notice_receipts": str(OWNER_PRE_SEND_NOTICE_RECEIPTS),
+        "reason": "Owner text notice was not sent live; refusing client send.",
+        "send_result": send_result,
+    }
 
 
 def capped_batch_size(requested: int) -> int:
@@ -838,6 +1066,10 @@ def run_batch_live(args: argparse.Namespace) -> dict[str, Any]:
     if not window_ok:
         return {"sent": 0, "blocked": True, "reason": window_reason}
 
+    notice_status = ensure_owner_pre_send_notice(packet)
+    if not notice_status.get("ready"):
+        return {"sent": 0, "blocked": True, "reason": notice_status.get("reason"), "owner_notice": notice_status}
+
     batch_id = str(packet.get("batch_id") or "")
     if not batch_id:
         return {"sent": 0, "blocked": True, "reason": "batch packet is missing a batch_id"}
@@ -981,6 +1213,15 @@ def run_pilot(args: argparse.Namespace) -> dict[str, Any]:
                 "reason": window_reason,
                 "packet": str(PILOT_PACKET),
             }
+        notice_status = ensure_owner_pre_send_notice(packet)
+        if not notice_status.get("ready"):
+            return {
+                "sent": False,
+                "blocked": True,
+                "reason": notice_status.get("reason"),
+                "owner_notice": notice_status,
+                "packet": str(PILOT_PACKET),
+            }
 
     try:
         result = send_reply(packet["payload"], packet["message"])
@@ -1061,6 +1302,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-packet", default=str(BATCH_PACKET), help="Prepared batch packet to send.")
     parser.add_argument("--batch-client", action="append", default=[], help="Optional client name/key filter. Can be repeated.")
     parser.add_argument("--batch-continue-on-failure", action="store_true", help="Continue sending the batch after a provider failure.")
+    parser.add_argument("--owner-pre-send-notice", action="store_true", help="Send or dry-run the owner text notice for a prepared batch packet.")
+    parser.add_argument("--owner-pre-send-notice-live", action="store_true", help="Actually send the owner pre-send iMessage notice.")
     return parser.parse_args()
 
 
@@ -1089,6 +1332,15 @@ def main() -> None:
         return
     if args.batch_live:
         result = run_batch_live(args)
+        print(json.dumps(redact_sensitive(result), indent=2, sort_keys=True))
+        return
+    if args.owner_pre_send_notice:
+        packet_path = Path(args.batch_packet)
+        if not packet_path.exists():
+            print(json.dumps({"blocked": True, "reason": f"batch packet not found: {packet_path}"}, indent=2, sort_keys=True))
+            return
+        packet = json.loads(packet_path.read_text(encoding="utf-8"))
+        result = ensure_owner_pre_send_notice(packet, live=args.owner_pre_send_notice_live)
         print(json.dumps(redact_sensitive(result), indent=2, sort_keys=True))
         return
 

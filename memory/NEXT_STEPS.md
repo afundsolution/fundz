@@ -7,10 +7,11 @@
 3. Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly, and macOS LaunchAgent `com.afundsolution.fundz-autonomous-operator` is also enabled by Brandon request. Review output before adding any additional scheduler.
 4. Latest safe autonomy proof: `data/local/autonomy/fundz-autonomous-operator-status.md`; latest run passed 6/6 operator steps, had no safety findings, and kept live sends disabled.
 5. Review `data/local/command-center/fundz-send-visibility-command-center.md` before any client/lead messaging decision. It shows what FUNDz has locally sent or attempted, plus the next-send queue with exact message bodies.
-6. Use `data/local/command-center/fundz-send-kill-switch.json` as the Command Center kill switch. Setting `"enabled": true` hard-blocks live client/lead sends, live HighLevel replies, DF/AutoFox campaign-assignment sends, and webhook-driven client responses while local reporting continues.
-7. If Brandon only wants the folder to remain parked, run `make inactive` again and verify no `screen` sessions or matching FUNDz runtime processes are running.
-8. If Brandon asks to wake a live piece, first run `make autonomous` or `make daily-board`, review the Work Queue, Client Communication Control Board, Send Visibility Command Center, and kill-switch state, then re-enable only the exact runtime or workflow he named.
-9. Current LaunchAgent proof: `launchctl print-disabled gui/$(id -u)` shows `com.afundsolution.fundz-autonomous-operator` and `com.afundsolution.fundz-imessage-fallback` enabled; both report last exit code `0`. The autonomous LaunchAgent still forces dry-run/no-live-send settings.
+6. Before any approved semi-autonomous live send, verify the owner text notice gate. The queue should show `owner_notice_status=ready`; otherwise run `make owner-pre-send-notice`, wait at least 120 seconds, and rerun the approved live-send command.
+7. Use `data/local/command-center/fundz-send-kill-switch.json` as the Command Center kill switch. Setting `"enabled": true` hard-blocks live client/lead sends, live HighLevel replies, DF/AutoFox campaign-assignment sends, and webhook-driven client responses while local reporting continues.
+8. If Brandon only wants the folder to remain parked, run `make inactive` again and verify no `screen` sessions or matching FUNDz runtime processes are running.
+9. If Brandon asks to wake a live piece, first run `make autonomous` or `make daily-board`, review the Work Queue, Client Communication Control Board, Send Visibility Command Center, owner text notice status, and kill-switch state, then re-enable only the exact runtime or workflow he named.
+10. Current LaunchAgent proof: `launchctl print-disabled gui/$(id -u)` shows `com.afundsolution.fundz-autonomous-operator` and `com.afundsolution.fundz-imessage-fallback` enabled; both report last exit code `0`. The autonomous LaunchAgent still forces dry-run/no-live-send settings.
 
 ## Wake Backlog
 

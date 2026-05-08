@@ -18,7 +18,13 @@ from typing import Any
 from fundz_autofox_audit import audit_records, load_records as load_autofox_records, newest_candidate_files, normalize
 from fundz_credit_tracker_bridge import load_env_file
 from fundz_operational_state import build_operational_state, relative_label, write_json, write_summary_csv
-from fundz_semi_autonomous_bot import build_action_queue
+from fundz_semi_autonomous_bot import (
+    OWNER_PRE_SEND_NOTICE_RECEIPTS,
+    build_action_queue,
+    owner_pre_send_notice_seconds,
+    packet_notice_key,
+    read_owner_pre_send_notices,
+)
 from scorefusion_billing_dashboard import build_dashboard as build_scorefusion_dashboard
 
 
@@ -1343,11 +1349,57 @@ def build_send_ledger(packet: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def parse_owner_notice_time(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def owner_pre_send_notice_summary(packet: dict[str, Any]) -> dict[str, Any]:
+    key = packet_notice_key(packet)
+    wait_seconds = owner_pre_send_notice_seconds()
+    sent_rows = [row for row in read_owner_pre_send_notices() if row.get("notice_key") == key and row.get("sent")]
+    if not sent_rows:
+        return {
+            "notice_key": key,
+            "status": "required_2_min_before_live_send",
+            "wait_seconds": wait_seconds,
+            "remaining_seconds": wait_seconds,
+            "receipt": relative_label(OWNER_PRE_SEND_NOTICE_RECEIPTS),
+        }
+    latest = sent_rows[-1]
+    sent_at = parse_owner_notice_time(latest.get("sent_at") or latest.get("created_at"))
+    if not sent_at:
+        return {
+            "notice_key": key,
+            "status": "sent_time_unknown",
+            "wait_seconds": wait_seconds,
+            "remaining_seconds": wait_seconds,
+            "receipt": relative_label(OWNER_PRE_SEND_NOTICE_RECEIPTS),
+        }
+    now = datetime.now(sent_at.tzinfo) if sent_at.tzinfo else datetime.now()
+    elapsed = max(int((now - sent_at).total_seconds()), 0)
+    remaining = max(wait_seconds - elapsed, 0)
+    return {
+        "notice_key": key,
+        "status": "ready" if remaining == 0 else "sent_waiting",
+        "wait_seconds": wait_seconds,
+        "remaining_seconds": remaining,
+        "sent_at": sent_at.isoformat(timespec="seconds"),
+        "receipt": relative_label(OWNER_PRE_SEND_NOTICE_RECEIPTS),
+    }
+
+
 def build_next_send_queue(packet: dict[str, Any], kill_switch: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     batch_id = str(packet.get("batch_id") or "")
     approval_required = bool(packet.get("approval_required", True))
     live_send_allowed = bool(packet.get("live_send_allowed"))
+    notice_summary = owner_pre_send_notice_summary(packet)
     for item in packet.get("items", []) if isinstance(packet.get("items"), list) else []:
         if not isinstance(item, dict):
             continue
@@ -1358,6 +1410,8 @@ def build_next_send_queue(packet: dict[str, Any], kill_switch: dict[str, Any]) -
             blocked_reasons.append("Command-center kill switch is ON.")
         elif approval_required:
             blocked_reasons.append("Live send still requires Brandon approval at action time.")
+        if notice_summary.get("status") != "ready":
+            blocked_reasons.append("Owner text notice must be sent at least 2 minutes before live send.")
         send_allowed = bool(item.get("send_ready")) and not blocked_reasons and live_send_allowed
         rows.append(
             {
@@ -1373,6 +1427,8 @@ def build_next_send_queue(packet: dict[str, Any], kill_switch: dict[str, Any]) -
                 "stage": str(item.get("stage_in_process") or ""),
                 "send_ready": "yes" if item.get("send_ready") else "no",
                 "kill_switch": str(kill_switch.get("status") or ""),
+                "owner_notice_status": str(notice_summary.get("status") or ""),
+                "owner_notice_remaining_seconds": str(notice_summary.get("remaining_seconds") or 0),
                 "send_allowed_now": "yes" if send_allowed else "no",
                 "blocked_reason": "; ".join(blocked_reasons),
                 "evidence": relative_label(EXPANSION_BATCH_PACKET),
@@ -1410,6 +1466,8 @@ NEXT_SEND_QUEUE_FIELDS = [
     "stage",
     "send_ready",
     "kill_switch",
+    "owner_notice_status",
+    "owner_notice_remaining_seconds",
     "send_allowed_now",
     "blocked_reason",
     "evidence",
@@ -3329,9 +3387,10 @@ def write_send_visibility(report: dict[str, Any], path: Path = SEND_VISIBILITY_M
             f"- CSV: {relative_label(NEXT_SEND_QUEUE_CSV)}",
             f"- Allowed now: {queue_counts.get('yes', 0)}",
             f"- Blocked/gated now: {queue_counts.get('no', 0)}",
+            f"- Owner text notice: {next_queue[0].get('owner_notice_status') if next_queue else 'not_applicable'}",
             "",
-            "| Rank | Client/Lead | Channel | Subject | Send allowed now | Blocked reason | Message body |",
-            "| --- | --- | --- | --- | --- | --- | --- |",
+            "| Rank | Client/Lead | Channel | Subject | Owner notice | Send allowed now | Blocked reason | Message body |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
     )
     for row in next_queue[:25]:
@@ -3344,6 +3403,7 @@ def write_send_visibility(report: dict[str, Any], path: Path = SEND_VISIBILITY_M
                     "client_or_lead",
                     "channel",
                     "subject",
+                    "owner_notice_status",
                     "send_allowed_now",
                     "blocked_reason",
                     "message_body",
@@ -3352,7 +3412,7 @@ def write_send_visibility(report: dict[str, Any], path: Path = SEND_VISIBILITY_M
             + " |"
         )
     if not next_queue:
-        lines.append("| - | None | - | - | no | No current expansion packet found. | - |")
+        lines.append("| - | None | - | - | not_applicable | no | No current expansion packet found. | - |")
     if len(next_queue) > 25:
         lines.append(f"- Plus {len(next_queue) - 25} more queued rows in `{relative_label(NEXT_SEND_QUEUE_CSV)}`.")
 
@@ -3532,6 +3592,7 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Next send queue rows: {len(next_queue)}",
             f"- Next-send allowed now: {sum(1 for row in next_queue if row.get('send_allowed_now') == 'yes')}",
             f"- Next-send gated now: {sum(1 for row in next_queue if row.get('send_allowed_now') != 'yes')}",
+            f"- Owner text notice: {next_queue[0].get('owner_notice_status') if next_queue else 'not_applicable'}",
             f"- Owner view: {relative_label(SEND_VISIBILITY_MD)}",
         ]
     )

@@ -136,7 +136,7 @@ It writes local, Git-ignored operator outputs:
 - `data/local/command-center/fundz-missing-steps-recheck.md`
 - `data/local/command-center/fundz-no-approval-work-queue.csv`
 
-Use this before expanding outreach. It shows today's top actions, owner-review clients, no-recent-contact exceptions, next safe batch candidates, pilot status, AutoFox failure/duplicate/after-hours counts, memory freshness, what changed since the last run, and the current Cloudflare/HighLevel/Credit Tracker blockers. The send visibility view shows what FUNDz has sent or attempted from local receipts/audits and the exact next queued message bodies from the current preview packet. The send kill switch blocks live client/lead sends, HighLevel live replies, DF/AutoFox campaign assignment sends, and webhook-driven client responses when `data/local/command-center/fundz-send-kill-switch.json` has `"enabled": true`. The owner decision outputs convert owner-review clients into approval choices such as billing review, import/round confirmation, onboarding follow-up, approve draft, or hold messaging. The missing-steps recheck keeps the remaining live proof, external permissions, CI, and rollout gaps visible after each refresh.
+Use this before expanding outreach. It shows today's top actions, owner-review clients, no-recent-contact exceptions, next safe batch candidates, pilot status, AutoFox failure/duplicate/after-hours counts, memory freshness, what changed since the last run, and the current Cloudflare/HighLevel/Credit Tracker blockers. The send visibility view shows what FUNDz has sent or attempted from local receipts/audits, the exact next queued message bodies from the current preview packet, and whether the required owner text notice has been sent at least two minutes before live send. The send kill switch blocks live client/lead sends, HighLevel live replies, DF/AutoFox campaign assignment sends, and webhook-driven client responses when `data/local/command-center/fundz-send-kill-switch.json` has `"enabled": true`. The owner decision outputs convert owner-review clients into approval choices such as billing review, import/round confirmation, onboarding follow-up, approve draft, or hold messaging. The missing-steps recheck keeps the remaining live proof, external permissions, CI, and rollout gaps visible after each refresh.
 
 ## Build The ScoreFusion Billing Dashboard
 
@@ -280,6 +280,12 @@ Live expansion sends are still approval-gated and capped by `FUNDZ_BATCH_MAX_SIZ
 
 ```sh
 scripts/fundz_semi_autonomous_bot.py --batch-live --approved-batch-send
+```
+
+Before a live pilot or batch can send to clients, FUNDz now sends Brandon an owner-only iMessage notice and blocks the client send until that notice is at least two minutes old. Configure `FUNDZ_OWNER_NOTIFY_TARGET` or `FUNDZ_OWNER_COMMAND_SENDERS`, then either let the approved live-send command send the notice and stop, or send the notice manually:
+
+```sh
+make owner-pre-send-notice
 ```
 
 Each batch writes a receipt under `data/local/semi-autonomous/receipts/`. A prepared batch cannot be accidentally sent twice; prepare a new preview for every new expansion.

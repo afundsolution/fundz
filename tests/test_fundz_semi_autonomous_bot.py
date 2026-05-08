@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -34,6 +34,7 @@ class FundzSemiAutonomousBotTests(unittest.TestCase):
             mock.patch.object(semi, "BATCH_PACKET", self.base / "semi" / "batch-packet.json"),
             mock.patch.object(semi, "BATCH_REPORT", self.base / "semi" / "batch-preview.md"),
             mock.patch.object(semi, "BATCH_RECEIPT_DIR", self.base / "semi" / "receipts"),
+            mock.patch.object(semi, "OWNER_PRE_SEND_NOTICE_RECEIPTS", self.base / "semi" / "receipts" / "fundz-owner-pre-send-notices.jsonl"),
             mock.patch.object(semi, "BILLING_RISK_REVIEW_CSV", self.base / "billing-risk-review.csv"),
         ]
         for patcher in self.path_patches:
@@ -95,6 +96,19 @@ class FundzSemiAutonomousBotTests(unittest.TestCase):
         defaults.update(overrides)
         return argparse.Namespace(**defaults)
 
+    def write_ready_owner_notice(self, packet: dict, seconds_ago: int = 180) -> None:
+        sent_at = (datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)).isoformat(timespec="seconds")
+        semi.append_owner_pre_send_notice(
+            {
+                "created_at": sent_at,
+                "sent_at": sent_at,
+                "notice_key": semi.packet_notice_key(packet),
+                "sent": True,
+                "dry_run": False,
+                "wait_seconds": 120,
+            }
+        )
+
     def batch_args(self, **overrides):
         defaults = {
             "batch_size": 3,
@@ -152,6 +166,7 @@ class FundzSemiAutonomousBotTests(unittest.TestCase):
         os.environ["CREDIT_TRACKER_DRY_RUN"] = "false"
         os.environ["CREDIT_TRACKER_REPLY_URL"] = "https://example.test/reply"
         os.environ["CREDIT_TRACKER_API_TOKEN"] = "token"
+        self.write_ready_owner_notice(semi.prepare_pilot(args))
 
         with (
             mock.patch.object(semi, "send_window_status", return_value=(True, "inside window")),
@@ -451,6 +466,8 @@ class FundzSemiAutonomousBotTests(unittest.TestCase):
             semi.build_batch_preview(preview_args)
 
         os.environ["CREDIT_TRACKER_DRY_RUN"] = "false"
+        packet = json.loads(semi.BATCH_PACKET.read_text(encoding="utf-8"))
+        self.write_ready_owner_notice(packet)
         with (
             mock.patch.object(semi, "send_window_status", return_value=(True, "inside window")),
             mock.patch.object(semi, "send_reply", return_value={"sent": True, "status": 201, "body": "{}"}),
@@ -461,6 +478,35 @@ class FundzSemiAutonomousBotTests(unittest.TestCase):
         self.assertEqual(result["blocked_or_failed"], 0)
         self.assertTrue(Path(result["result_path"]).exists())
         self.assertTrue(Path(result["receipt_path"]).exists())
+
+    def test_batch_live_sends_owner_notice_and_blocks_until_two_minute_window(self) -> None:
+        state = self.sample_state()
+        queue = semi.build_action_queue(state)
+        preview_args = self.batch_args(resolve_contact=True)
+        resolved = {
+            "ok": True,
+            "contact": {"id": "highlevel-contact", "firstName": "Ada", "email": "ada@example.com"},
+            "error": None,
+        }
+        with (
+            mock.patch.object(semi, "run_once", return_value=(state, queue)),
+            mock.patch.object(semi, "resolve_contact", return_value=resolved),
+        ):
+            semi.build_batch_preview(preview_args)
+
+        os.environ["CREDIT_TRACKER_DRY_RUN"] = "false"
+        os.environ["FUNDZ_OWNER_NOTIFY_TARGET"] = "+18325551234"
+        with (
+            mock.patch.object(semi, "send_window_status", return_value=(True, "inside window")),
+            mock.patch.object(semi, "send_owner_notice_text", return_value={"returncode": 0, "stdout": "ok", "stderr": "", "dry_run": False}) as send_notice,
+            mock.patch.object(semi, "send_reply") as send_reply,
+        ):
+            result = semi.run_batch_live(self.batch_args(approved_batch_send=True))
+
+        self.assertTrue(result["blocked"])
+        self.assertIn("Owner text notice sent", result["reason"])
+        send_notice.assert_called_once()
+        send_reply.assert_not_called()
 
     def test_send_window_blocks_weekend_live_sends(self) -> None:
         allowed, reason = semi.send_window_status(datetime(2026, 5, 9, 12, 0, 0))

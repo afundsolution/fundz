@@ -1,4 +1,4 @@
-.PHONY: start handoff memory-check command-center daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout imessage-fallback highlevel-inbox-workaround webhook-probe inactive test
+.PHONY: start handoff memory-check command-center daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe inactive test
 
 start:
 	sh scripts/start-session.sh
@@ -47,6 +47,9 @@ ai-router:
 
 autofox-rollout:
 	python3 scripts/fundz_autofox_rollout_packet.py
+
+owner-pre-send-notice:
+	python3 scripts/fundz_semi_autonomous_bot.py --owner-pre-send-notice --owner-pre-send-notice-live
 
 imessage-fallback:
 	python3 scripts/fundz_imessage_fallback.py

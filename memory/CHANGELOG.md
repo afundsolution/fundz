@@ -2,6 +2,16 @@
 
 ## 2026-05-08
 
+### Owner Pre-Send Text Notice
+
+- Added a two-minute owner text notice gate for approved semi-autonomous live pilot and batch sends.
+- Live send attempts now send Brandon an owner-only iMessage notice first, block the client send, and require the notice to be at least `FUNDZ_OWNER_PRE_SEND_NOTICE_SECONDS` old before a later run can send to clients.
+- Added `make owner-pre-send-notice` to send the owner notice for the current prepared batch without sending clients.
+- Added local owner notice receipts at `data/local/semi-autonomous/receipts/fundz-owner-pre-send-notices.jsonl`.
+- Updated the Command Center next-send queue and send visibility board with `owner_notice_status` and remaining notice seconds.
+- Added `.env.example` settings for `FUNDZ_OWNER_NOTIFY_TARGET`, `FUNDZ_OWNER_PRE_SEND_NOTICE_SECONDS`, and `FUNDZ_OWNER_PRE_SEND_NOTICE_LIVE`.
+- Verified focused semi-autonomous and command-center tests plus the full local test suite.
+
 ### Command Center Send Visibility
 
 - Added a Command Center send visibility board at `data/local/command-center/fundz-send-visibility-command-center.md`.
