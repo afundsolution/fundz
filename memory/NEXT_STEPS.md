@@ -6,10 +6,9 @@
 2. Start any future work by reading `FUNDZ_SLEEP_MODE.md`, then `memory/HANDOFF.md`, `memory/CURRENT_STATUS.md`, and this file.
 3. Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly. Review its output before adding another scheduler.
 4. Latest safe autonomy proof: `data/local/autonomy/fundz-autonomous-operator-status.md`; latest run passed 6/6 operator steps, had no safety findings, and kept live sends disabled.
-5. PR #1 should be merged after `memory-check` and `python-tests` pass: `https://github.com/afundsolution/fundz/pull/1`.
-6. If Brandon only wants the folder to remain parked, run `make inactive` again and verify no `screen` sessions or matching FUNDz runtime processes are running.
-7. If Brandon asks to wake a live piece, first run `make autonomous` or `make daily-board`, review the Work Queue and Client Communication Control Board, then re-enable only the exact runtime or workflow he named.
-8. Current inactive proof: `data/local/command-center/fundz-inactive-receipt.md`; no `screen` sessions remain; `com.afundsolution.fundz-imessage-fallback` is disabled; no matching bridge/tunnel/poller/fallback processes are running.
+5. If Brandon only wants the folder to remain parked, run `make inactive` again and verify no `screen` sessions or matching FUNDz runtime processes are running.
+6. If Brandon asks to wake a live piece, first run `make autonomous` or `make daily-board`, review the Work Queue and Client Communication Control Board, then re-enable only the exact runtime or workflow he named.
+7. Current inactive proof: `data/local/command-center/fundz-inactive-receipt.md`; no `screen` sessions remain; `com.afundsolution.fundz-imessage-fallback` is disabled; no matching bridge/tunnel/poller/fallback processes are running.
 
 ## Wake Backlog
 

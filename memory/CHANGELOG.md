@@ -21,6 +21,7 @@
 - Pushed `codex/fundz-safe-autonomy-operating-system` and opened PR #1.
 - Updated branch protection so `main` requires both `memory-check` and `python-tests`.
 - Fixed CI-only SMS pilot dry-run payload shape by adding an explicit HighLevel-safe pilot SMS template with `contactId`.
+- Merged PR #1 after both required GitHub checks passed and synced local `main`.
 - Created hourly Codex automation `fundz-safe-autonomous-operator` to run the safe operator in this workspace.
 - Verified HighLevel inbox preview mode returned status 200, fetched 5, handled 2, and sent 0.
 - Generated Supabase dashboard SQL chunks under `data/local/supabase-dashboard-sync` because no local database URL is configured.
