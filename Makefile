@@ -18,10 +18,10 @@ daily-board:
 	@sed -n '1,20p' data/local/command-center/fundz-daily-board.md
 
 autonomous:
-	python3 scripts/fundz_autonomous_operator.py --once --today "$${TODAY:-$$(date +%F)}" --run-tests
+	FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true python3 scripts/fundz_autonomous_operator.py --once --today "$${TODAY:-$$(date +%F)}" --run-tests
 
 autonomous-watch:
-	python3 scripts/fundz_autonomous_operator.py --watch --today "$${TODAY:-$$(date +%F)}"
+	FUNDZ_ALLOW_IMESSAGE_FALLBACK_LAUNCHAGENT=true python3 scripts/fundz_autonomous_operator.py --watch --today "$${TODAY:-$$(date +%F)}"
 
 maintenance-autopilot:
 	python3 scripts/fundz_maintenance_autopilot.py --today "$${TODAY:-$$(date +%F)}" --run-tests
