@@ -6,12 +6,15 @@
 # Local runtime data
 data/local/*
 !data/local/.gitkeep
+data/G Drive/
 data/exports/*
 !data/exports/.gitkeep
 data/dispute-fox/*
 !data/dispute-fox/.gitkeep
 logs/*
 !logs/.gitkeep
+outputs/*
+FUNDz_Operational_Update_*.md
 
 # Backups are generated locally and can be copied to remote storage.
 backups/*
