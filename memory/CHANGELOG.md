@@ -39,6 +39,12 @@
 - Verified `sh -n scripts/fundz_inactive.sh`, `sh scripts/check-memory.sh`, and `make test` all passed; `make test` ran 139 tests.
 - No commit was created because the worktree already contains many unrelated modified/untracked FUNDz changes.
 
+### Maintenance Cleanup Autopilot
+
+- Ran `python3 scripts/fundz_maintenance_autopilot.py --today 2026-05-07 --run-tests` at 2026-05-07 22:02 CDT.
+- Result: OK (7/7 steps), no safety findings; rollout packet remained approval-gated (`approval_required=true`, `live_send_allowed=false`, `selected=0`).
+- Summary counts: billing rows 195, unique clients 184, archived/excluded 7, bounced routes 1, duplicate-review 57.
+
 ## 2026-05-06
 
 ### Webhook Probe Hardening

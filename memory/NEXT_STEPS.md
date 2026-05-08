@@ -108,4 +108,5 @@ The backlog below is preserved for a future wake request. Do not treat it as per
 
 - Review the regenerated maintenance cleanup board: `data/local/maintenance-cleanup/fundz-maintenance-cleanup-board.md`.
 - Review duplicates CSV (review-once queue): `data/local/maintenance-cleanup/fundz-duplicate-billing-review.csv`.
+- Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:02 CDT; OK; no safety findings; approval required; live sends disabled).
 - Keep outreach approval-gated; do not enable live sends from this repo while parked inactive.

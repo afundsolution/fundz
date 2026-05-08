@@ -12,6 +12,7 @@ FUNDz is a local operational automation project for client updates, DisputeFox/H
 - `make autonomous-watch` exists, but it only runs if `FUNDZ_AUTONOMOUS_OPERATOR_ENABLED=true` is set locally.
 - Codex automation `fundz-safe-autonomous-operator` is active and scheduled hourly to run the safe operator from this workspace.
 - Latest safe-autonomy status: `data/local/autonomy/fundz-autonomous-operator-status.md`.
+- Latest maintenance autopilot status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-07 22:02 CDT; OK; approval required; live sends disabled).
 - PR #1 was merged at `https://github.com/afundsolution/fundz/pull/1`; branch protection now requires both `memory-check` and `python-tests`.
 - HighLevel inbox preview access is working again in dry-run/preview mode; latest check returned status 200, fetched 5, handled 2, and sent 0.
 - No local Postgres URL is configured; Supabase dashboard SQL chunks are generated under `data/local/supabase-dashboard-sync` when memory sync is needed.
