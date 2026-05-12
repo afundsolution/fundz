@@ -1,4 +1,4 @@
-.PHONY: start handoff memory-check command-center command-center-domain daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe inactive test
+.PHONY: start handoff memory-check command-center command-center-domain daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe supabase-memory-sync supabase-dashboard-sql inactive test
 
 start:
 	sh scripts/start-session.sh
@@ -62,6 +62,12 @@ highlevel-inbox-workaround:
 
 webhook-probe:
 	python3 scripts/fundz_credit_tracker_webhook_probe.py
+
+supabase-memory-sync:
+	python3 scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state
+
+supabase-dashboard-sql:
+	python3 scripts/fundz_postgres_memory.py --sync-operational-state --write-dashboard-chunks data/local/supabase-dashboard-sync
 
 inactive:
 	sh scripts/fundz_inactive.sh

@@ -20,23 +20,30 @@ from fundz_operational_state import build_operational_state, normalize_name
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCHEMA = ROOT / "db" / "migrations" / "001_live_memory.sql"
 DEFAULT_DASHBOARD_CHUNK_BYTES = 45_000
+DATABASE_URL_ENV_NAMES = ("FUNDZ_MEMORY_DATABASE_URL", "SUPABASE_DB_URL", "DATABASE_URL", "NEON_DATABASE_URL")
+
+
+def database_url_source() -> tuple[str, str]:
+    for name in DATABASE_URL_ENV_NAMES:
+        value = os.getenv(name, "").strip()
+        if value:
+            return name, value
+    return "", ""
 
 
 def database_url() -> str:
-    for name in ("FUNDZ_MEMORY_DATABASE_URL", "SUPABASE_DB_URL", "DATABASE_URL", "NEON_DATABASE_URL"):
-        value = os.getenv(name, "").strip()
-        if value:
-            return value
-    return ""
+    return database_url_source()[1]
 
 
 def require_database_url() -> str:
-    url = database_url()
+    source, url = database_url_source()
     if not url:
         raise SystemExit(
-            "Missing Postgres URL. Set FUNDZ_MEMORY_DATABASE_URL, SUPABASE_DB_URL, "
-            "DATABASE_URL, or NEON_DATABASE_URL in .env.local."
+            "Missing real Postgres database URL for command-line sync. Set one of "
+            f"{', '.join(DATABASE_URL_ENV_NAMES)} in .env.local. "
+            "Without that URL, use `make supabase-dashboard-sql` and run the generated chunks in Supabase."
         )
+    print(f"Using Postgres URL from {source}.")
     return url
 
 
