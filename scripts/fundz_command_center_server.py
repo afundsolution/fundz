@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Serve the A FUND Solution Command Center as a protected local web dashboard."""
+"""Serve the FUNDz Command Center as a protected local web dashboard."""
 
 from __future__ import annotations
 
 import argparse
-import csv
 import html
-import io
 import json
 import os
 import secrets
@@ -23,144 +21,31 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "data" / "local" / "command-center"
 DOMAIN_CONFIG = OUTPUT_DIR / "fundz-command-center-domain.json"
 COMMAND_CENTER_MD = OUTPUT_DIR / "fundz-command-center.md"
-TODAY_OPERATING_BOARD_MD = OUTPUT_DIR / "fundz-today-operating-board.md"
 DAILY_BOARD_MD = OUTPUT_DIR / "fundz-daily-board.md"
 SEND_VISIBILITY_MD = OUTPUT_DIR / "fundz-send-visibility-command-center.md"
 KILL_SWITCH_MD = OUTPUT_DIR / "fundz-send-kill-switch.md"
-SEND_GATE_LOCK_MD = OUTPUT_DIR / "fundz-send-gate-lock.md"
-BILLING_MAINTENANCE_FOCUS_MD = OUTPUT_DIR / "fundz-billing-maintenance-focus.md"
-BILLING_MAINTENANCE_FOCUS_CSV = OUTPUT_DIR / "fundz-billing-maintenance-focus.csv"
-ARCHIVE_RECEIPT_TRAIL_MD = OUTPUT_DIR / "fundz-archive-receipt-trail.md"
 NEXT_SEND_QUEUE_CSV = OUTPUT_DIR / "fundz-next-send-queue.csv"
 WORK_QUEUE_CSV = OUTPUT_DIR / "fundz-work-queue.csv"
 COMMAND_CENTER_JSON = OUTPUT_DIR / "fundz-command-center.json"
+OWNER_REVIEW_ACTIONS_JSON = OUTPUT_DIR / "fundz-owner-review-dashboard-actions.json"
+OWNER_REVIEW_ACTIONS_JSONL = OUTPUT_DIR / "fundz-owner-review-dashboard-actions.jsonl"
+
+OWNER_REVIEW_STATUSES = {"Needs Brandon", "Hold", "Proof Needed"}
+OWNER_REVIEW_ACTION_LABELS = {
+    "keep_hold": "Keep on hold",
+    "needs_proof": "Needs proof",
+    "fixed_locally": "Problem fixed locally",
+    "needs_brandon": "Needs Brandon decision",
+}
 
 SAFE_FILES = {
     "command-center": COMMAND_CENTER_MD,
-    "today-board": TODAY_OPERATING_BOARD_MD,
     "daily-board": DAILY_BOARD_MD,
     "send-visibility": SEND_VISIBILITY_MD,
-    "send-gate-lock": SEND_GATE_LOCK_MD,
-    "billing-maintenance": BILLING_MAINTENANCE_FOCUS_MD,
-    "billing-maintenance-csv": BILLING_MAINTENANCE_FOCUS_CSV,
-    "archive-receipts": ARCHIVE_RECEIPT_TRAIL_MD,
     "kill-switch": KILL_SWITCH_MD,
     "next-send-queue": NEXT_SEND_QUEUE_CSV,
     "work-queue": WORK_QUEUE_CSV,
     "json": COMMAND_CENTER_JSON,
-}
-
-PAGE_NAV = (
-    {
-        "slug": "command-center",
-        "title": "Full Report",
-        "kicker": "Big Picture",
-        "description": "Everything the local A FUND Solution Command Center knows right now.",
-        "tone": "info",
-    },
-    {
-        "slug": "today-board",
-        "title": "Today Board",
-        "kicker": "Focus",
-        "description": "The current operating lane and owner-safe next step.",
-        "tone": "good",
-    },
-    {
-        "slug": "daily-board",
-        "title": "Daily Board",
-        "kicker": "Five Lines",
-        "description": "The short readable board for today's work.",
-        "tone": "good",
-    },
-    {
-        "slug": "send-visibility",
-        "title": "Send Visibility",
-        "kicker": "Receipts",
-        "description": "Sent, attempted, and queued message visibility.",
-        "tone": "sky",
-    },
-    {
-        "slug": "send-gate-lock",
-        "title": "Send Gate Lock",
-        "kicker": "Safety",
-        "description": "Why the next sends are still approval-gated.",
-        "tone": "warn",
-    },
-    {
-        "slug": "billing-maintenance",
-        "title": "Billing Maintenance",
-        "kicker": "Cleanup",
-        "description": "Urgent, date-sensitive, and duplicate billing review.",
-        "tone": "rose",
-    },
-    {
-        "slug": "archive-receipts",
-        "title": "Archive Receipts",
-        "kicker": "Proof",
-        "description": "Archive candidates, exceptions, and proof notes.",
-        "tone": "violet",
-    },
-    {
-        "slug": "next-send-queue",
-        "title": "Next Send Queue",
-        "kicker": "Preview",
-        "description": "Queued client messages, shown as review cards.",
-        "tone": "sky",
-    },
-    {
-        "slug": "work-queue",
-        "title": "Work Queue",
-        "kicker": "Rows",
-        "description": "Every local work row with the next step up front.",
-        "tone": "info",
-    },
-    {
-        "slug": "kill-switch",
-        "title": "Kill Switch",
-        "kicker": "Control",
-        "description": "The local stop control for live sends.",
-        "tone": "warn",
-    },
-    {
-        "slug": "json",
-        "title": "JSON",
-        "kicker": "Machine Data",
-        "description": "The full structured report for tools and audits.",
-        "tone": "violet",
-    },
-)
-PAGE_META = {item["slug"]: item for item in PAGE_NAV}
-
-CSV_FOCUS_COLUMNS = {
-    "next-send-queue": (
-        "queue_rank",
-        "client_or_lead",
-        "channel",
-        "subject",
-        "owner_notice_status",
-        "send_allowed_now",
-        "blocked_reason",
-        "message_body",
-    ),
-    "work-queue": (
-        "queue_status",
-        "client_name",
-        "lane",
-        "owner",
-        "due_date",
-        "next_step",
-        "proof_required",
-        "evidence",
-    ),
-    "billing-maintenance-csv": (
-        "client_name",
-        "review_status",
-        "billing_issue",
-        "next_import",
-        "amount_due",
-        "recommended_next_action",
-        "evidence",
-    ),
 }
 
 
@@ -256,6 +141,79 @@ def auth_link(slug: str, token: str) -> str:
     return f"/files/{quote(slug)}?token={quote(token)}"
 
 
+def work_order_id(row: dict[str, Any]) -> str:
+    for key in ("work_order_id", "client_key", "client_name"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value
+    return "unknown-work-order"
+
+
+def priority_score(row: dict[str, Any]) -> int:
+    try:
+        return int(row.get("priority_score") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def owner_review_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = report.get("work_queue") if isinstance(report.get("work_queue"), list) else []
+    review_rows = [
+        row
+        for row in rows
+        if isinstance(row, dict) and str(row.get("queue_status") or "").strip() in OWNER_REVIEW_STATUSES
+    ]
+    status_rank = {"Needs Brandon": 0, "Hold": 1, "Proof Needed": 2}
+    return sorted(
+        review_rows,
+        key=lambda row: (
+            status_rank.get(str(row.get("queue_status") or ""), 9),
+            -priority_score(row),
+            str(row.get("client_name") or ""),
+        ),
+    )
+
+
+def load_owner_review_actions() -> dict[str, dict[str, Any]]:
+    data = read_json(OWNER_REVIEW_ACTIONS_JSON)
+    actions = data.get("items") if isinstance(data.get("items"), dict) else {}
+    return {str(key): value for key, value in actions.items() if isinstance(value, dict)}
+
+
+def save_owner_review_action(payload: dict[str, Any]) -> dict[str, Any]:
+    report = read_json(COMMAND_CENTER_JSON)
+    rows_by_id = {work_order_id(row): row for row in owner_review_rows(report)}
+    requested_id = str(payload.get("work_order_id") or "").strip()
+    if requested_id not in rows_by_id:
+        raise ValueError("This queue item is not in the current Brandon review list.")
+    action = str(payload.get("action") or "").strip()
+    if action not in OWNER_REVIEW_ACTION_LABELS:
+        raise ValueError("Choose a valid local review action.")
+    note = str(payload.get("note") or "").strip()[:800]
+    row = rows_by_id[requested_id]
+    saved = {
+        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "work_order_id": requested_id,
+        "client_name": str(row.get("client_name") or ""),
+        "queue_status": str(row.get("queue_status") or ""),
+        "action": action,
+        "action_label": OWNER_REVIEW_ACTION_LABELS[action],
+        "note": note,
+        "source": "fundz_command_center_dashboard",
+        "local_only": True,
+        "no_live_send": True,
+        "no_external_edit": True,
+    }
+    current = read_json(OWNER_REVIEW_ACTIONS_JSON)
+    items = current.get("items") if isinstance(current.get("items"), dict) else {}
+    items[requested_id] = saved
+    write_json(OWNER_REVIEW_ACTIONS_JSON, {"updated_at": saved["saved_at"], "items": items})
+    OWNER_REVIEW_ACTIONS_JSONL.parent.mkdir(parents=True, exist_ok=True)
+    with OWNER_REVIEW_ACTIONS_JSONL.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(saved, sort_keys=True) + "\n")
+    return saved
+
+
 def display_text(value: Any, fallback: str = "Not set") -> str:
     text = str(value or "").replace("_", " ").strip()
     return text if text else fallback
@@ -270,240 +228,17 @@ def status_key(value: Any) -> str:
     return "info"
 
 
-def auth_view_link(slug: str, token: str) -> str:
-    return f"/view/{quote(slug)}?token={quote(token)}"
-
-
-def page_meta(slug: str) -> dict[str, str]:
-    meta = PAGE_META.get(slug)
-    if meta:
-        return meta
-    return {
-        "slug": slug,
-        "title": friendly_label(slug),
-        "kicker": "Local File",
-        "description": "A local Command Center output rendered for review.",
-        "tone": "info",
-    }
-
-
-def friendly_label(value: Any) -> str:
-    text = str(value or "").replace("_", " ").replace("-", " ").strip()
-    if not text:
-        return "Not Set"
-    special = {"id", "sms", "df", "csv", "json", "url", "api"}
-    words = [word.upper() if word.lower() in special else word.capitalize() for word in text.split()]
-    return " ".join(words)
-
-
-def inline_html(text: str) -> str:
-    parts = str(text).split("`")
-    rendered = []
-    for index, part in enumerate(parts):
-        escaped = html.escape(part)
-        rendered.append(f"<code>{escaped}</code>" if index % 2 else escaped)
-    return "".join(rendered)
-
-
-def markdown_table_row(line: str) -> list[str]:
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
-
-
-def is_markdown_table_separator(line: str) -> bool:
-    cells = markdown_table_row(line)
-    return bool(cells) and all(cell and set(cell) <= {"-", ":", " "} for cell in cells)
-
-
-def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
-    header_html = "".join(f"<th>{inline_html(header)}</th>" for header in headers)
-    row_html = []
-    for row in rows:
-        padded = row + [""] * max(0, len(headers) - len(row))
-        cells = "".join(f"<td>{inline_html(cell)}</td>" for cell in padded[: len(headers)])
-        row_html.append(f"<tr>{cells}</tr>")
+def render_metric(label: str, value: Any, note: str = "", *, review_button: bool = False) -> str:
+    tag = "a" if review_button else "div"
+    attrs = " href='#owner-review-panel' role='button' data-open-owner-review aria-haspopup='dialog'" if review_button else ""
+    hint = "<em>Open review panel</em>" if review_button else ""
     return (
-        "<div class='table-wrap'>"
-        "<table class='data-table'>"
-        f"<thead><tr>{header_html}</tr></thead>"
-        f"<tbody>{''.join(row_html)}</tbody>"
-        "</table>"
-        "</div>"
-    )
-
-
-def render_markdown_document(text: str) -> str:
-    if not text.strip():
-        return "<p class='empty'>This local output has not been generated yet.</p>"
-    lines = text.splitlines()
-    rendered: list[str] = []
-    paragraph: list[str] = []
-    in_list = False
-
-    def flush_paragraph() -> None:
-        nonlocal paragraph
-        if paragraph:
-            rendered.append(f"<p>{inline_html(' '.join(paragraph))}</p>")
-            paragraph = []
-
-    def close_list() -> None:
-        nonlocal in_list
-        if in_list:
-            rendered.append("</ul>")
-            in_list = False
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].rstrip()
-        stripped = line.strip()
-        if not stripped:
-            flush_paragraph()
-            close_list()
-            i += 1
-            continue
-        if stripped.startswith("|") and i + 1 < len(lines) and is_markdown_table_separator(lines[i + 1]):
-            flush_paragraph()
-            close_list()
-            headers = markdown_table_row(stripped)
-            rows: list[list[str]] = []
-            i += 2
-            while i < len(lines) and lines[i].strip().startswith("|"):
-                rows.append(markdown_table_row(lines[i]))
-                i += 1
-            rendered.append(render_markdown_table(headers, rows))
-            continue
-        if stripped.startswith("#"):
-            flush_paragraph()
-            close_list()
-            level = min(len(stripped) - len(stripped.lstrip("#")), 3)
-            title = stripped[level:].strip()
-            rendered.append(f"<h{level}>{inline_html(title)}</h{level}>")
-            i += 1
-            continue
-        if stripped.startswith(("- ", "* ")):
-            flush_paragraph()
-            if not in_list:
-                rendered.append("<ul class='friendly-list'>")
-                in_list = True
-            rendered.append(f"<li>{inline_html(stripped[2:].strip())}</li>")
-            i += 1
-            continue
-        paragraph.append(stripped)
-        i += 1
-
-    flush_paragraph()
-    close_list()
-    return "".join(rendered)
-
-
-def read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
-    text = read_text(path, limit=1_000_000)
-    if not text.strip():
-        return [], []
-    reader = csv.DictReader(io.StringIO(text))
-    headers = list(reader.fieldnames or [])
-    rows = [{str(key): str(value or "") for key, value in row.items() if key is not None} for row in reader]
-    return headers, rows
-
-
-def count_values(rows: list[dict[str, str]], key: str) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for row in rows:
-        value = display_text(row.get(key), "Blank")
-        counts[value] = counts.get(value, 0) + 1
-    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:6])
-
-
-def render_stat_cards(cards: list[tuple[str, Any, str]]) -> str:
-    if not cards:
-        return ""
-    return "<div class='stat-grid'>" + "".join(render_metric(label, value, note) for label, value, note in cards) + "</div>"
-
-
-def render_csv_document(slug: str, path: Path) -> tuple[str, str]:
-    headers, rows = read_csv_rows(path)
-    if not headers:
-        return "<p class='empty'>This CSV is empty or has not been generated yet.</p>", ""
-    focus = [column for column in CSV_FOCUS_COLUMNS.get(slug, headers[:8]) if column in headers]
-    if not focus:
-        focus = headers[:8]
-    visible_rows = rows[:80]
-    status_column = next((column for column in ("queue_status", "status", "send_allowed_now", "review_status") if column in headers), "")
-    cards = [
-        ("Rows", len(rows), f"showing {len(visible_rows)}"),
-        ("Columns", len(headers), "focused view"),
-        ("File", path.name, "raw file still available"),
-    ]
-    if status_column:
-        top_counts = count_values(rows, status_column)
-        cards.extend((friendly_label(label), count, friendly_label(status_column)) for label, count in top_counts.items())
-    header_html = "".join(f"<th>{html.escape(friendly_label(column))}</th>" for column in focus)
-    row_html = []
-    for row in visible_rows:
-        cells = "".join(f"<td>{inline_html(row.get(column, ''))}</td>" for column in focus)
-        row_html.append(f"<tr>{cells}</tr>")
-    table = (
-        "<div class='table-wrap'>"
-        "<table class='data-table roomy'>"
-        f"<thead><tr>{header_html}</tr></thead>"
-        f"<tbody>{''.join(row_html)}</tbody>"
-        "</table>"
-        "</div>"
-    )
-    if len(rows) > len(visible_rows):
-        table += f"<p class='empty'>Showing the first {len(visible_rows)} rows. Use the raw file link for the full CSV.</p>"
-    return table, render_stat_cards(cards)
-
-
-def render_json_document(path: Path) -> tuple[str, str]:
-    data = read_json(path)
-    if not data:
-        return "<p class='empty'>This JSON report is empty or has not been generated yet.</p>", ""
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    send_queue = data.get("next_send_queue") if isinstance(data.get("next_send_queue"), list) else []
-    work_queue = data.get("work_queue") if isinstance(data.get("work_queue"), list) else []
-    cards = [
-        ("Generated", display_text(data.get("generated_at"), "Not generated"), "report timestamp"),
-        ("Active Clients", summary.get("active_clients", 0), "from summary"),
-        ("Next Messages", len(send_queue), "preview rows"),
-        ("Work Queue", len(work_queue), "local rows"),
-        ("Top Keys", len(data.keys()), "machine sections"),
-    ]
-    pretty = html.escape(json.dumps(data, indent=2, sort_keys=True))
-    body = (
-        "<section class='friendly-section'>"
-        "<h2>Machine Data, Human Wrapped</h2>"
-        "<p>This is the same structured Command Center report, wrapped so it is easy to inspect without losing the raw data.</p>"
-        "<details open><summary>View formatted JSON</summary>"
-        f"<pre class='json-block'>{pretty}</pre>"
-        "</details>"
-        "</section>"
-    )
-    return body, render_stat_cards(cards)
-
-
-def render_file_body(slug: str, path: Path) -> tuple[str, str]:
-    if path.suffix == ".csv":
-        return render_csv_document(slug, path)
-    if path.suffix == ".json":
-        return render_json_document(path)
-    text = compact_markdown(path)
-    cards = [
-        ("File", path.name, "local output"),
-        ("Lines", len(text.splitlines()), "readable view"),
-    ]
-    generated = next((line.split(":", 1)[1].strip() for line in text.splitlines() if line.lower().startswith("generated:")), "")
-    if generated:
-        cards.insert(0, ("Generated", generated, "report timestamp"))
-    return render_markdown_document(text), render_stat_cards(cards)
-
-
-def render_metric(label: str, value: Any, note: str = "") -> str:
-    return (
-        "<div class='metric'>"
+        f"<{tag} class='metric{' metric-button' if review_button else ''}'{attrs}>"
         f"<span>{html.escape(label)}</span>"
         f"<strong>{html.escape(str(value))}</strong>"
         f"<small>{html.escape(note)}</small>"
-        "</div>"
+        f"{hint}"
+        f"</{tag}>"
     )
 
 
@@ -513,6 +248,68 @@ def render_chip(label: str, value: Any, tone: str = "info") -> str:
         f"<b>{html.escape(label)}</b>"
         f"{html.escape(display_text(value))}"
         "</span>"
+    )
+
+
+def list_rows(report: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    rows = report.get(key)
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def count_by(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        label = display_text(row.get(key), "Unknown")
+        counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
+def render_section_title(kicker: str, title: str, detail: str = "") -> str:
+    detail_html = f"<p>{html.escape(detail)}</p>" if detail else ""
+    return (
+        "<div class='section-title'>"
+        f"<span>{html.escape(kicker)}</span>"
+        f"<h2>{html.escape(title)}</h2>"
+        f"{detail_html}"
+        "</div>"
+    )
+
+
+def render_action_tile(title: str, value: Any, detail: str, href: str, label: str, *, tone: str = "neutral", attrs: str = "") -> str:
+    return (
+        f"<a class='action-tile {html.escape(tone)}' href='{html.escape(href, quote=True)}' {attrs}>"
+        f"<span>{html.escape(title)}</span>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        f"<small>{html.escape(detail)}</small>"
+        f"<em>{html.escape(label)}</em>"
+        "</a>"
+    )
+
+
+def render_progress_bars(counts: dict[str, int], *, limit: int = 8) -> str:
+    total = sum(counts.values())
+    if total <= 0:
+        return "<p class='empty'>No rows available yet.</p>"
+    items = []
+    for label, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]:
+        percent = max(2, round((value / total) * 100))
+        items.append(
+            "<div class='bar-row'>"
+            f"<div><strong>{html.escape(label)}</strong><span>{value}</span></div>"
+            f"<div class='bar-track'><span style='width:{percent}%'></span></div>"
+            "</div>"
+        )
+    return f"<div class='bar-list'>{''.join(items)}</div>"
+
+
+def render_mini_stats(stats: list[tuple[str, Any, str]]) -> str:
+    return "".join(
+        "<div class='mini-stat'>"
+        f"<span>{html.escape(label)}</span>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        f"<small>{html.escape(note)}</small>"
+        "</div>"
+        for label, value, note in stats
     )
 
 
@@ -581,361 +378,211 @@ def render_send_queue(send_queue: list[dict[str, Any]]) -> str:
     return f"<div class='queue-list'>{''.join(items)}</div>"
 
 
-def render_operating_map(token: str) -> str:
-    routes = (
-        (
-            "Open first",
-            "Today Board",
-            "The single lane for the current work block.",
-            auth_view_link("today-board", token),
+def render_client_watch(report: dict[str, Any]) -> str:
+    rows = list_rows(report, "communication_control_board")
+    if not rows:
+        return "<p class='empty'>No client communication board has been generated yet.</p>"
+    priority = sorted(
+        rows,
+        key=lambda row: (
+            status_key(row.get("communication_status")) != "warn",
+            str(row.get("client_name") or ""),
         ),
-        (
-            "Do the work",
-            "Work Queue",
-            "Rows with owner, next step, due date, proof, and evidence.",
-            auth_view_link("work-queue", token),
-        ),
-        (
-            "Billing",
-            "Billing Maintenance",
-            "Lucy-owned billing decisions supplied by the FUNDz source workflow.",
-            auth_view_link("billing-maintenance", token),
-        ),
-        (
-            "Messages",
-            "Send Visibility",
-            "Receipts and next-send gates. This is visibility, not approval.",
-            auth_view_link("send-visibility", token),
-        ),
-    )
+    )[:6]
     cards = []
-    for kicker, title, body, href in routes:
+    for row in priority:
+        status = display_text(row.get("communication_status"), "Review")
         cards.append(
-            "<a class='map-card' href='{}'>"
-            "<span>{}</span>"
-            "<strong>{}</strong>"
-            "<small>{}</small>"
-            "</a>".format(
-                href,
-                html.escape(kicker),
-                html.escape(title),
-                html.escape(body),
-            )
+            "<article class='client-card'>"
+            "<div>"
+            f"<strong>{html.escape(display_text(row.get('client_name'), 'Client'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('current_phase')))}</span>"
+            "</div>"
+            f"<span class='pill {status_key(status)}'>{html.escape(status)}</span>"
+            f"<p>{html.escape(display_text(row.get('block_reason') or row.get('next_step'), 'No local action recorded.'))}</p>"
+            "</article>"
         )
-    return (
-        "<div class='map-grid'>"
-        "<article class='map-card fixed'>"
-        "<span>Hierarchy</span>"
-        "<strong>One Command Center</strong>"
-        "<small>A FUND Solution is the command center. FUNDz is one source workflow feeding local evidence, billing, archive, and message-readiness outputs.</small>"
-        "</article>"
-        f"{''.join(cards)}"
-        "</div>"
-        "<div class='message-key'>"
-        "<strong>Message types:</strong> "
-        "<span>Work Queue = task rows</span>"
-        "<span>Send Visibility = receipts and gates</span>"
-        "<span>Next Send Queue = preview only</span>"
-        "</div>"
+    return f"<div class='client-grid'>{''.join(cards)}</div>"
+
+
+def render_billing_watch(report: dict[str, Any]) -> str:
+    scorefusion = report.get("scorefusion") if isinstance(report.get("scorefusion"), dict) else {}
+    rows = scorefusion.get("billing_risk_review_rows") if isinstance(scorefusion.get("billing_risk_review_rows"), list) else []
+    if not rows:
+        return "<p class='empty'>No billing risk rows available yet.</p>"
+    cards = []
+    for row in [item for item in rows if isinstance(item, dict)][:5]:
+        cards.append(
+            "<article class='billing-row'>"
+            f"<strong>{html.escape(display_text(row.get('client_name'), 'Client'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('risk_level'), 'Review'))}</span>"
+            f"<p>{html.escape(display_text(row.get('next_step') or row.get('review_bucket'), 'Review billing proof.'))}</p>"
+            "</article>"
+        )
+    return f"<div class='billing-list'>{''.join(cards)}</div>"
+
+
+def render_activity_feed(report: dict[str, Any]) -> str:
+    ledger = list_rows(report, "send_ledger")
+    receipts = report.get("receipts") if isinstance(report.get("receipts"), dict) else {}
+    recent = receipts.get("recent_receipts") if isinstance(receipts.get("recent_receipts"), list) else []
+    cards = []
+    for row in ledger[:5]:
+        cards.append(
+            "<li>"
+            f"<strong>{html.escape(display_text(row.get('client_or_lead'), 'Client or lead'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('channel')))} / {html.escape(display_text(row.get('source')))}</span>"
+            f"<small>{html.escape(display_text(row.get('sent_at') or row.get('proof'), 'Local receipt'))}</small>"
+            "</li>"
+        )
+    for row in [item for item in recent if isinstance(item, dict)][:3]:
+        cards.append(
+            "<li>"
+            f"<strong>{html.escape(display_text(row.get('client_name') or row.get('client_or_lead'), 'Receipt'))}</strong>"
+            f"<span>{html.escape(display_text(row.get('kind') or row.get('source')))}</span>"
+            f"<small>{html.escape(display_text(row.get('sent_at') or row.get('proof'), 'Local receipt'))}</small>"
+            "</li>"
+        )
+    if not cards:
+        return "<p class='empty'>No recent local activity rows available.</p>"
+    return f"<ul class='activity-list'>{''.join(cards[:7])}</ul>"
+
+
+def render_file_tiles(token: str) -> str:
+    tiles = (
+        ("Command Center", "Full local report", auth_link("command-center", token)),
+        ("Send Visibility", "What FUNDz sent or may send", auth_link("send-visibility", token)),
+        ("Next Queue", "Previewed messages before approval", auth_link("next-send-queue", token)),
+        ("Work Queue", "All rows behind the hub", auth_link("work-queue", token)),
+        ("Kill Switch", "Current send block state", auth_link("kill-switch", token)),
+        ("JSON", "Raw dashboard data", auth_link("json", token)),
+    )
+    return "".join(
+        "<a class='file-tile' href='{href}'>"
+        "<strong>{title}</strong>"
+        "<span>{detail}</span>"
+        "</a>".format(
+            href=html.escape(href, quote=True),
+            title=html.escape(title),
+            detail=html.escape(detail),
+        )
+        for title, detail, href in tiles
     )
 
 
-def render_links(token: str, active_slug: str = "") -> str:
-    items = []
-    for meta in PAGE_NAV:
-        slug = meta["slug"]
-        active = " active" if slug == active_slug else ""
-        items.append(
-            f"<a class='nav-card {html.escape(meta['tone'])}{active}' href='{auth_view_link(slug, token)}'>"
-            f"<span>{html.escape(meta['kicker'])}</span>"
-            f"<strong>{html.escape(meta['title'])}</strong>"
-            f"<small>{html.escape(meta['description'])}</small>"
-            "</a>"
+def render_owner_review_panel(rows: list[dict[str, Any]], actions: dict[str, dict[str, Any]]) -> str:
+    count = len(rows)
+    if rows:
+        cards = []
+        action_options = "".join(
+            f"<option value='{html.escape(value, quote=True)}'>{html.escape(label)}</option>"
+            for value, label in OWNER_REVIEW_ACTION_LABELS.items()
         )
-    return "".join(items)
-
-
-def common_styles() -> str:
-    return """
-    :root {
-      color-scheme: light;
-      --ink:#172026;
-      --muted:#5d6d75;
-      --line:#d7e2e5;
-      --paper:#ffffff;
-      --wash:#f6faf8;
-      --deep:#102f3b;
-      --mint:#dcf7e8;
-      --mint-ink:#115e3b;
-      --gold:#fff1c8;
-      --gold-ink:#735000;
-      --sky:#e3f2ff;
-      --sky-ink:#075985;
-      --rose:#ffe5df;
-      --rose-ink:#9b2f23;
-      --violet:#efe9ff;
-      --violet-ink:#55409a;
-    }
-    * { box-sizing:border-box; }
-    body {
-      margin:0;
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      color:var(--ink);
-      background:#f7faf8;
-      line-height:1.45;
-    }
-    a { color:inherit; }
-    .site-header {
-      padding:26px 28px 22px;
-      border-bottom:1px solid var(--line);
-      background:linear-gradient(180deg,#ffffff 0,#f8fbfb 100%);
-    }
-    .hero { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:end; }
-    .hero-copy { max-width:820px; }
-    h1 { margin:0; font-size:clamp(30px,4vw,54px); line-height:1; letter-spacing:0; }
-    h2 { margin:0 0 12px; font-size:22px; line-height:1.15; letter-spacing:0; }
-    h3 { margin:20px 0 8px; font-size:18px; }
-    p { margin:0 0 12px; }
-    .sub { margin:9px 0 0; color:var(--muted); max-width:760px; font-size:16px; }
-    .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
-    .chip,.pill {
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      border-radius:999px;
-      padding:7px 10px;
-      font-size:13px;
-      border:1px solid var(--line);
-      white-space:normal;
-      font-weight:650;
-    }
-    .chip b { font-weight:800; }
-    .good { --accent:#1d7a54; --tint:var(--mint); --tone-ink:var(--mint-ink); }
-    .warn { --accent:#b98200; --tint:var(--gold); --tone-ink:var(--gold-ink); }
-    .info { --accent:#2b6f89; --tint:#e6f7fa; --tone-ink:#17566a; }
-    .sky { --accent:#1976a3; --tint:var(--sky); --tone-ink:var(--sky-ink); }
-    .rose { --accent:#c64a37; --tint:var(--rose); --tone-ink:var(--rose-ink); }
-    .violet { --accent:#7862c8; --tint:var(--violet); --tone-ink:var(--violet-ink); }
-    .chip.good,.pill.good { background:var(--mint); color:var(--mint-ink); border-color:#b9e7cd; }
-    .chip.warn,.pill.warn { background:var(--gold); color:var(--gold-ink); border-color:#ebd38d; }
-    .chip.info,.pill.info { background:var(--sky); color:var(--sky-ink); border-color:#bfdef4; }
-    .chip.sky,.pill.sky { background:var(--sky); color:var(--sky-ink); border-color:#bfdef4; }
-    .chip.rose,.pill.rose { background:var(--rose); color:var(--rose-ink); border-color:#eec5bd; }
-    .chip.violet,.pill.violet { background:var(--violet); color:var(--violet-ink); border-color:#d7ccff; }
-    .nav-grid {
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-      gap:10px;
-      margin-top:18px;
-    }
-    .nav-card {
-      min-height:112px;
-      display:grid;
-      align-content:start;
-      gap:6px;
-      padding:13px;
-      border:1px solid color-mix(in srgb,var(--accent),#fff 55%);
-      border-left:7px solid var(--accent);
-      border-radius:8px;
-      background:var(--paper);
-      color:var(--ink);
-      text-decoration:none;
-      box-shadow:0 1px 0 rgba(16,47,59,.05);
-    }
-    .nav-card:hover,.nav-card.active {
-      background:var(--tint);
-      transform:translateY(-1px);
-      box-shadow:0 8px 18px rgba(16,47,59,.09);
-    }
-    .nav-card span {
-      color:var(--tone-ink);
-      font-size:11px;
-      font-weight:850;
-      letter-spacing:.04em;
-      text-transform:uppercase;
-    }
-    .nav-card strong { font-size:17px; line-height:1.1; }
-    .nav-card small { color:var(--muted); font-size:13px; line-height:1.3; }
-    .compact-header .nav-grid { grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); }
-    .compact-header .nav-card { min-height:76px; padding:10px 11px; }
-    .compact-header .nav-card small { display:none; }
-    main { max-width:1280px; padding:22px 28px 42px; }
-    .top-actions { display:flex; flex-wrap:wrap; gap:9px; justify-content:flex-end; }
-    .home-pill,.raw-link {
-      min-height:38px;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      padding:8px 12px;
-      border:1px solid var(--line);
-      border-radius:999px;
-      background:#fff;
-      color:#164d68;
-      text-decoration:none;
-      font-weight:750;
-      font-size:14px;
-    }
-    .metrics,.stat-grid {
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(165px,1fr));
-      gap:12px;
-      margin:18px 0;
-    }
-    .metric {
-      border:1px solid var(--line);
-      border-radius:8px;
-      background:var(--paper);
-      padding:14px;
-      min-height:98px;
-      border-top:5px solid #dbe7e9;
-    }
-    .metric span { display:block; color:var(--muted); font-size:13px; font-weight:700; }
-    .metric strong { display:block; margin-top:8px; font-size:24px; line-height:1.05; overflow-wrap:anywhere; }
-    .metric small { display:block; margin-top:7px; color:var(--muted); overflow-wrap:anywhere; }
-    .grid { display:grid; grid-template-columns:1.05fr .95fr; gap:16px; align-items:start; }
-    section,.friendly-section,.document {
-      border:1px solid var(--line);
-      background:var(--paper);
-      border-radius:8px;
-      padding:16px;
-    }
-    .document { border-top:7px solid var(--accent,#2b6f89); }
-    .document h1 { margin:0 0 14px; font-size:30px; line-height:1.08; }
-    .document h2 { margin-top:22px; padding-top:14px; border-top:1px solid var(--line); }
-    .document h3 { color:var(--deep); }
-    .document p,.document li { max-width:1050px; font-size:15px; }
-    .friendly-list { display:grid; gap:8px; padding-left:22px; }
-    .friendly-list li::marker { color:var(--accent,#2b6f89); }
-    .brief-list { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
-    .brief-list li { display:grid; gap:4px; padding-bottom:10px; border-bottom:1px solid var(--line); }
-    .brief-list li:last-child { border-bottom:0; padding-bottom:0; }
-    .brief-list span,.queue-meta,.queue-item small,.empty { color:var(--muted); font-size:13px; }
-    .brief-list strong { font-size:15px; line-height:1.4; }
-    .queue-list { display:grid; gap:10px; }
-    .queue-item { border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--wash); }
-    .queue-head { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-    .queue-head strong { font-size:15px; }
-    .rank { font-weight:800; color:var(--sky-ink); }
-    .queue-meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-    .queue-meta span { background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px 8px; }
-    .queue-item p { margin:10px 0 8px; overflow-wrap:anywhere; }
-    .map-grid {
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
-      gap:10px;
-    }
-    .map-card {
-      display:grid;
-      gap:6px;
-      min-height:122px;
-      padding:14px;
-      border:1px solid var(--line);
-      border-radius:8px;
-      background:#fff;
-      text-decoration:none;
-      border-top:5px solid #2b6f89;
-    }
-    .map-card.fixed { border-top-color:#1d7a54; }
-    .map-card span {
-      color:var(--muted);
-      font-size:12px;
-      font-weight:850;
-      text-transform:uppercase;
-      letter-spacing:.04em;
-    }
-    .map-card strong { font-size:17px; line-height:1.15; }
-    .map-card small { color:var(--muted); line-height:1.35; }
-    .message-key {
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-      margin-top:12px;
-      color:var(--muted);
-    }
-    .message-key span {
-      border:1px solid var(--line);
-      border-radius:999px;
-      background:#f8fbfb;
-      padding:6px 9px;
-      font-size:13px;
-    }
-    .table-wrap { width:100%; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fff; }
-    .data-table { width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed; }
-    .data-table.roomy { min-width:920px; }
-    th,td { border-bottom:1px solid var(--line); text-align:left; padding:10px 9px; vertical-align:top; overflow-wrap:anywhere; }
-    th { color:var(--muted); font-weight:800; background:#f8fbfb; position:sticky; top:0; }
-    tr:nth-child(even) td { background:#fbfdfd; }
-    details { border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
-    summary { cursor:pointer; padding:12px 14px; font-weight:800; background:var(--wash); }
-    .json-block {
-      margin:0;
-      max-height:72vh;
-      overflow:auto;
-      padding:14px;
-      background:#101820;
-      color:#e9f6f2;
-      font-size:12px;
-      line-height:1.45;
-    }
-    .utility-row { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 0; color:var(--muted); }
-    code { background:#eef5f6; border:1px solid var(--line); border-radius:5px; padding:1px 4px; }
-    @media (max-width:980px) { .grid,.hero { grid-template-columns:1fr; } .top-actions { justify-content:flex-start; } }
-    @media (max-width:640px) {
-      .site-header,main { padding-left:16px; padding-right:16px; }
-      .nav-grid { grid-template-columns:1fr; }
-      .compact-header .nav-grid { grid-template-columns:1fr 1fr; }
-      .compact-header .nav-card { min-height:62px; }
-      .compact-header .nav-card strong { font-size:15px; }
-      .metric strong { font-size:21px; }
-      .data-table { table-layout:auto; }
-    }
-  """
-
-
-def render_page_shell(title: str, intro: str, body: str, token: str, active_slug: str, stats_html: str = "") -> str:
-    meta = page_meta(active_slug)
-    raw = auth_link(active_slug, token)
-    nav = render_links(token, active_slug)
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A FUND Solution Command Center - {html.escape(title)}</title>
-  <style>{common_styles()}</style>
-</head>
-<body>
-  <header class="site-header compact-header">
-    <div class="hero">
-      <div class="hero-copy">
-        <p class="pill {html.escape(meta['tone'])}">{html.escape(meta['kicker'])}</p>
-        <h1>{html.escape(title)}</h1>
-        <p class="sub">{html.escape(intro)}</p>
-      </div>
-      <div class="top-actions">
-        <a class="home-pill" href="/?token={quote(token)}">Dashboard Home</a>
-        <a class="raw-link" href="{raw}">Open Raw File</a>
-      </div>
+        for index, row in enumerate(rows, start=1):
+            row_id = work_order_id(row)
+            saved = actions.get(row_id, {})
+            saved_text = (
+                f"Last saved: {display_text(saved.get('action_label'))}"
+                if saved
+                else "No local decision saved yet."
+            )
+            cards.append(
+                "<article class='review-card'>"
+                "<div class='review-head'>"
+                f"<span class='rank'>#{index}</span>"
+                f"<strong>{html.escape(display_text(row.get('client_name'), 'Client'))}</strong>"
+                f"<span class='pill {status_key(row.get('queue_status'))}'>{html.escape(display_text(row.get('queue_status')))}</span>"
+                "</div>"
+                "<dl class='review-details'>"
+                f"<div><dt>Lane</dt><dd>{html.escape(display_text(row.get('lane')))}</dd></div>"
+                f"<div><dt>Due</dt><dd>{html.escape(display_text(row.get('due_date')))}</dd></div>"
+                f"<div><dt>Why held</dt><dd>{html.escape(display_text(row.get('do_not_send_because'), 'Review required before outreach.'))}</dd></div>"
+                f"<div><dt>Next step</dt><dd>{html.escape(display_text(row.get('next_step')))}</dd></div>"
+                f"<div><dt>Proof needed</dt><dd>{html.escape(display_text(row.get('proof_required')))}</dd></div>"
+                f"<div><dt>Evidence</dt><dd>{html.escape(display_text(row.get('evidence')))}</dd></div>"
+                "</dl>"
+                "<form class='review-form'>"
+                f"<input type='hidden' name='work_order_id' value='{html.escape(row_id, quote=True)}'>"
+                "<label>Decision"
+                f"<select name='action'>{action_options}</select>"
+                "</label>"
+                "<label>Note"
+                "<textarea name='note' rows='2' placeholder='What did you fix or decide?'></textarea>"
+                "</label>"
+                "<button type='submit'>Save Local Fix</button>"
+                f"<span class='save-state'>{html.escape(saved_text)}</span>"
+                "</form>"
+                "</article>"
+            )
+        body = "".join(cards)
+    else:
+        body = "<p class='empty'>Nothing needs Brandon review right now.</p>"
+    return f"""
+<section id="owner-review-panel" class="review-panel" aria-label="Needs Brandon review panel">
+  <div class="review-dialog" role="dialog" aria-modal="true">
+    <div class="dialog-top">
+    <div>
+      <h2>Needs Brandon Review</h2>
+      <p>{count} queue item(s) need Brandon/hold review. These fixes are local notes only; nothing sends and no external system changes.</p>
     </div>
-    <nav class="nav-grid" aria-label="A FUND Solution Command Center pages">{nav}</nav>
-  </header>
-  <main>
-    {stats_html}
-    <article class="document {html.escape(meta['tone'])}">
-      {body}
-    </article>
-    <p class="utility-row">Safe-mode note: these pages make local reports easier to read. They do not approve, edit, or send client-facing work.</p>
-  </main>
-</body>
-</html>
+    <a class="dialog-close" href="#">Close</a>
+    </div>
+    <div class="review-list">{body}</div>
+  </div>
+</section>
 """
 
 
-def render_file_page(slug: str, token: str) -> str:
-    target = SAFE_FILES[slug]
-    meta = page_meta(slug)
-    body, stats = render_file_body(slug, target)
-    return render_page_shell(meta["title"], meta["description"], body, token, slug, stats)
+def render_owner_review_script() -> str:
+    return """
+<script>
+(() => {
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+  for (const form of document.querySelectorAll(".review-form")) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const state = form.querySelector(".save-state");
+      const data = new FormData(form);
+      const payload = {
+        work_order_id: data.get("work_order_id"),
+        action: data.get("action"),
+        note: data.get("note"),
+      };
+      if (state) state.textContent = "Saving...";
+      try {
+        const response = await fetch(`/review-action?token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "Could not save local review.");
+        }
+        if (state) state.textContent = `Saved: ${result.action_label}`;
+      } catch (error) {
+        if (state) state.textContent = error.message || "Could not save local review.";
+      }
+    });
+  }
+})();
+</script>
+"""
+
+
+def render_links(token: str) -> str:
+    return "".join(
+        f"<a href='{auth_link(slug, token)}'>{html.escape(label)}</a>"
+        for slug, label in (
+            ("command-center", "Full Report"),
+            ("daily-board", "Daily Board"),
+            ("send-visibility", "Send Visibility"),
+            ("next-send-queue", "Next Send Queue"),
+            ("work-queue", "Work Queue"),
+            ("kill-switch", "Kill Switch"),
+            ("json", "JSON"),
+        )
+    )
 
 
 def render_home(token: str) -> str:
@@ -943,28 +590,50 @@ def render_home(token: str) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     send_queue = report.get("next_send_queue") if isinstance(report.get("next_send_queue"), list) else []
     kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
-    safety_gate = report.get("safety_gate") if isinstance(report.get("safety_gate"), dict) else {}
+    scorefusion = report.get("scorefusion") if isinstance(report.get("scorefusion"), dict) else {}
     maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
-    billing_decisions = maintenance.get("billing_decisions") if isinstance(maintenance.get("billing_decisions"), dict) else {}
-    archive_trail = report.get("archive_receipt_trail") if isinstance(report.get("archive_receipt_trail"), dict) else {}
-    queue_status = {}
-    for row in report.get("work_queue", []) if isinstance(report.get("work_queue"), list) else []:
-        status = str(row.get("queue_status") or "Unknown")
-        queue_status[status] = queue_status.get(status, 0) + 1
+    memory_freshness = report.get("memory_freshness") if isinstance(report.get("memory_freshness"), dict) else {}
+    work_queue = list_rows(report, "work_queue")
+    comm_rows = list_rows(report, "communication_control_board")
+    send_ledger = list_rows(report, "send_ledger")
+    review_rows = owner_review_rows(report)
+    review_actions = load_owner_review_actions()
+    queue_status = count_by(work_queue, "queue_status")
+    lane_counts = count_by(work_queue, "lane")
+    comm_status = count_by(comm_rows, "communication_status")
     allowed_now = sum(1 for row in send_queue if str(row.get("send_allowed_now") or "").lower() == "yes")
-    needs_attention = queue_status.get("Needs Brandon", 0) + queue_status.get("Hold", 0) + queue_status.get("Proof Needed", 0)
-    cards = [
-        ("Safety Gate", display_text(safety_gate.get("state"), "Local reporting only"), display_text(safety_gate.get("note"), "client sends remain off")),
-        ("Live Sends", "Off", "client-facing work is inactive"),
-        ("Active Clients", summary.get("active_clients", 0), "tracked locally"),
-        ("Needs Attention", needs_attention, "hold, proof, or Brandon"),
-        ("Next Messages", len(send_queue), f"{allowed_now} allowed now"),
-        ("Billing Maintenance", f"{billing_decisions.get('active_urgent_billing_review', 0)} urgent", f"{billing_decisions.get('active_date_sensitive_billing_review', 0)} date-sensitive, {maintenance.get('duplicate_review_clients', 0)} duplicate"),
-        ("Archive Receipts", archive_trail.get("live_confirmed", 0), f"{archive_trail.get('exceptions', 0)} exceptions"),
-        ("Work Queue", sum(queue_status.values()), "local rows"),
-        ("Kill Switch", display_text(kill_switch.get("status"), "gated"), "local control"),
-    ]
-    card_html = "".join(render_metric(*card) for card in cards)
+    kill_enabled = bool(kill_switch.get("enabled"))
+    live_status = "Blocked" if kill_enabled else "Gated"
+    next_action = next((row for row in report.get("daily_board", []) if isinstance(row, dict) and row.get("label") == "Next Action"), {})
+    blocked = next((row for row in report.get("daily_board", []) if isinstance(row, dict) and row.get("label") == "Blocked"), {})
+    proof = next((row for row in report.get("daily_board", []) if isinstance(row, dict) and row.get("label") == "Proof Required"), {})
+    action_tiles = "".join(
+        (
+            render_action_tile(
+                "Needs Brandon",
+                len(review_rows),
+                "Hold and proof rows ready for review",
+                "#owner-review-panel",
+                "Open review panel",
+                tone="warm",
+                attrs="data-open-owner-review aria-haspopup='dialog'",
+            ),
+            render_action_tile("Queued Messages", len(send_queue), f"{allowed_now} allowed now", "#next-queue", "Preview queue", tone="sky"),
+            render_action_tile("Kill Switch", live_status, display_text(kill_switch.get("reason"), "Local control ready"), auth_link("kill-switch", token), "Open control file", tone="rose"),
+            render_action_tile("Work Queue", len(work_queue), "Every local row behind the hub", auth_link("work-queue", token), "Open CSV", tone="mint"),
+        )
+    )
+    card_html = "".join(
+        render_metric(label, value, note, review_button=review_button)
+        for label, value, note, review_button in (
+            ("Live Sends", "Off", "client-facing work is inactive", False),
+            ("Active Clients", summary.get("active_clients", 0), "tracked locally", False),
+            ("Needs Brandon", len(review_rows), "click to review/fix", True),
+            ("Next Messages", len(send_queue), f"{allowed_now} allowed now", False),
+            ("Work Queue", sum(queue_status.values()), "local rows", False),
+            ("Kill Switch", display_text(kill_switch.get("status"), "gated"), "local control", False),
+        )
+    )
     chips = "".join(
         (
             render_chip("Mode", "Inactive", "good"),
@@ -977,49 +646,239 @@ def render_home(token: str) -> str:
     daily = render_daily_board(report)
     top_actions = render_top_actions(report)
     queue = render_send_queue(send_queue)
-    operating_map = render_operating_map(token)
+    client_watch = render_client_watch(report)
+    billing_watch = render_billing_watch(report)
+    activity_feed = render_activity_feed(report)
+    file_tiles = render_file_tiles(token)
+    health_stats = render_mini_stats(
+        [
+            ("Client rows", len(comm_rows) or summary.get("active_clients", 0), "communication board"),
+            ("Local receipts", len(send_ledger), "sent or attempted"),
+            ("Billing exceptions", scorefusion.get("exceptions", 0), "ScoreFusion watch"),
+            ("Maintenance", maintenance.get("billing_decisions", 0), "billing decisions"),
+            ("Memory", "Stale" if memory_freshness.get("stale") else "Fresh", "local source files"),
+        ]
+    )
+    queue_bars = render_progress_bars(queue_status)
+    lane_bars = render_progress_bars(lane_counts)
+    comm_bars = render_progress_bars(comm_status)
+    owner_review_panel = render_owner_review_panel(review_rows, review_actions)
+    owner_review_script = render_owner_review_script()
     generated = html.escape(str(report.get("generated_at") or "not generated"))
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A FUND Solution Command Center</title>
-  <style>{common_styles()}</style>
+  <title>FUNDz Command Center</title>
+  <style>
+    :root {{ color-scheme: light; --ink:#172026; --muted:#65737a; --line:#d8e2e6; --paper:#ffffff; --wash:#f4f7f6; --deep:#102f3a; --mint:#dff7ea; --mint-ink:#115e3b; --gold:#fff0c7; --gold-ink:#7a4f00; --sky:#e3f2ff; --sky-ink:#075985; --rose:#ffe3dc; --rose-ink:#9f2f1f; --lav:#ece7ff; --lav-ink:#4c3292; }}
+    * {{ box-sizing:border-box; }}
+    html {{ scroll-behavior:smooth; }}
+    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:#f7f9f8; }}
+    header {{ padding:22px 28px 18px; border-bottom:1px solid var(--line); background:linear-gradient(135deg,#ffffff 0,#f4fbf8 52%,#fff6dc 100%); }}
+    h1 {{ margin:0; font-size:34px; letter-spacing:0; }}
+    h2 {{ font-size:18px; margin:0; }}
+    p {{ line-height:1.45; }}
+    main {{ padding:20px 28px 44px; max-width:1360px; }}
+    .hero {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,420px); gap:18px; align-items:stretch; }}
+    .hero-card {{ border:1px solid rgba(16,47,58,.14); background:rgba(255,255,255,.78); border-radius:8px; padding:18px; box-shadow:0 12px 36px rgba(16,47,58,.08); }}
+    .eyebrow {{ margin:0 0 6px; color:var(--sky-ink); font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:0; }}
+    .sub {{ margin:8px 0 0; color:var(--muted); max-width:760px; }}
+    .chips {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }}
+    .chip,.pill {{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 10px; font-size:13px; border:1px solid var(--line); white-space:normal; }}
+    .chip b {{ font-weight:700; }}
+    .good {{ background:var(--mint); color:var(--mint-ink); border-color:#bee8cf; }}
+    .warn {{ background:var(--gold); color:var(--gold-ink); border-color:#efd78f; }}
+    .info {{ background:var(--sky); color:var(--sky-ink); border-color:#bddff8; }}
+    .rose {{ background:var(--rose); color:var(--rose-ink); border-color:#f2c4bb; }}
+    .lav {{ background:var(--lav); color:var(--lav-ink); border-color:#d9d0ff; }}
+    .links,.hub-nav {{ display:flex; flex-wrap:wrap; gap:8px; }}
+    .links {{ justify-content:flex-end; }}
+    .links a,.hub-nav a,.button {{ border:1px solid var(--line); border-radius:6px; padding:8px 10px; color:#0f4f77; text-decoration:none; background:#fff; font-size:14px; font-weight:700; }}
+    .hub-nav {{ position:sticky; top:0; z-index:20; padding:10px 28px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.94); backdrop-filter:blur(12px); }}
+    .metrics {{ display:grid; grid-template-columns:repeat(6,minmax(140px,1fr)); gap:12px; margin:16px 0; }}
+    .metric {{ border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:14px; min-height:92px; }}
+    .metric span {{ display:block; color:var(--muted); font-size:13px; }}
+    .metric strong {{ display:block; margin-top:8px; font-size:22px; word-break:break-word; }}
+    .metric small {{ display:block; margin-top:6px; color:var(--muted); }}
+    .metric em {{ display:block; margin-top:8px; color:var(--sky-ink); font-style:normal; font-weight:700; font-size:13px; }}
+    .metric-button {{ cursor:pointer; text-align:left; font:inherit; color:inherit; text-decoration:none; display:block; }}
+    .metric-button:hover,.metric-button:focus {{ border-color:#8cc7ee; box-shadow:0 0 0 3px rgba(14,116,144,.12); outline:0; }}
+    .action-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; }}
+    .action-tile {{ display:grid; gap:8px; min-height:142px; border:1px solid var(--line); border-radius:8px; padding:16px; background:#fff; color:var(--ink); text-decoration:none; box-shadow:0 8px 24px rgba(16,47,58,.06); }}
+    .action-tile span {{ color:var(--muted); font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:0; }}
+    .action-tile strong {{ font-size:30px; line-height:1; overflow-wrap:anywhere; }}
+    .action-tile small {{ color:var(--muted); line-height:1.35; }}
+    .action-tile em {{ align-self:end; color:#0f4f77; font-style:normal; font-weight:800; }}
+    .action-tile.warm {{ background:#fffaf0; border-color:#efd78f; }}
+    .action-tile.sky {{ background:#f0f8ff; border-color:#bddff8; }}
+    .action-tile.rose {{ background:#fff4f1; border-color:#f2c4bb; }}
+    .action-tile.mint {{ background:#f0fbf4; border-color:#bee8cf; }}
+    .dashboard-grid {{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(340px,.8fr); gap:16px; align-items:start; }}
+    .split-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }}
+    .three-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }}
+    section {{ border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:16px; }}
+    section + section {{ margin-top:16px; }}
+    .section-title {{ display:grid; gap:4px; margin-bottom:12px; }}
+    .section-title span {{ color:var(--sky-ink); font-size:12px; font-weight:800; text-transform:uppercase; }}
+    .section-title p {{ margin:0; color:var(--muted); }}
+    .brief-list {{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }}
+    .brief-list li {{ display:grid; gap:4px; padding-bottom:10px; border-bottom:1px solid var(--line); }}
+    .brief-list li:last-child {{ border-bottom:0; padding-bottom:0; }}
+    .brief-list span,.queue-meta,.queue-item small,.empty {{ color:var(--muted); font-size:13px; }}
+    .brief-list strong {{ font-size:15px; line-height:1.4; }}
+    .queue-list {{ display:grid; gap:10px; }}
+    .queue-item {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--wash); }}
+    .queue-head {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }}
+    .queue-head strong {{ font-size:15px; }}
+    .rank {{ font-weight:700; color:var(--sky-ink); }}
+    .queue-meta {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }}
+    .queue-meta span {{ background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px 8px; }}
+    .queue-item p {{ margin:10px 0 8px; overflow-wrap:anywhere; }}
+    .data-table {{ width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed; }}
+    th,td {{ border-bottom:1px solid var(--line); text-align:left; padding:9px 8px; vertical-align:top; overflow-wrap:anywhere; }}
+    th {{ color:var(--muted); font-weight:600; }}
+    .mini-stats {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-top:12px; }}
+    .mini-stat {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; }}
+    .mini-stat span,.mini-stat small {{ display:block; color:var(--muted); font-size:12px; }}
+    .mini-stat strong {{ display:block; margin:5px 0; font-size:20px; }}
+    .bar-list {{ display:grid; gap:10px; }}
+    .bar-row div:first-child {{ display:flex; justify-content:space-between; gap:10px; margin-bottom:5px; font-size:13px; }}
+    .bar-row span {{ color:var(--muted); }}
+    .bar-track {{ height:10px; border-radius:999px; background:#edf2f2; overflow:hidden; }}
+    .bar-track span {{ display:block; height:100%; background:linear-gradient(90deg,#58c39a,#6bb7e6); }}
+    .client-grid,.billing-list,.activity-list {{ display:grid; gap:10px; }}
+    .client-card,.billing-row {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--wash); }}
+    .client-card div {{ display:flex; justify-content:space-between; gap:10px; align-items:start; margin-bottom:8px; }}
+    .client-card div span,.billing-row span {{ color:var(--muted); font-size:13px; }}
+    .client-card p,.billing-row p {{ margin:8px 0 0; color:var(--muted); }}
+    .activity-list {{ list-style:none; margin:0; padding:0; }}
+    .activity-list li {{ border-bottom:1px solid var(--line); padding:0 0 10px; }}
+    .activity-list li:last-child {{ border-bottom:0; padding-bottom:0; }}
+    .activity-list strong,.activity-list span,.activity-list small {{ display:block; }}
+    .activity-list span,.activity-list small {{ color:var(--muted); font-size:13px; margin-top:4px; }}
+    .file-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }}
+    .file-tile {{ border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--wash); color:var(--ink); text-decoration:none; }}
+    .file-tile strong,.file-tile span {{ display:block; }}
+    .file-tile span {{ color:var(--muted); margin-top:4px; font-size:13px; }}
+    .review-panel {{ display:none; position:fixed; inset:0; z-index:40; overflow:auto; padding:22px; background:rgba(15,32,39,.42); }}
+    .review-panel:target {{ display:block; }}
+    .review-dialog {{ width:min(980px,calc(100vw - 28px)); margin:0 auto; border:1px solid var(--line); border-radius:8px; padding:0; color:var(--ink); background:#fff; box-shadow:0 20px 80px rgba(15,32,39,.28); }}
+    .dialog-top {{ position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:16px; padding:16px; z-index:1; }}
+    .dialog-top h2 {{ margin-bottom:4px; }}
+    .dialog-top p {{ margin:0; color:var(--muted); }}
+    .dialog-close,.review-form button {{ border:1px solid var(--line); border-radius:6px; background:#fff; color:#0f4f77; padding:8px 10px; font-weight:700; cursor:pointer; }}
+    .review-list {{ display:grid; gap:12px; padding:16px; background:var(--wash); }}
+    .review-card {{ border:1px solid var(--line); border-radius:8px; background:#fff; padding:14px; }}
+    .review-head {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }}
+    .review-head strong {{ font-size:16px; }}
+    .review-details {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; margin:0 0 12px; }}
+    .review-details div {{ border-bottom:1px solid var(--line); padding-bottom:8px; }}
+    .review-details dt {{ color:var(--muted); font-size:12px; font-weight:700; margin-bottom:4px; }}
+    .review-details dd {{ margin:0; overflow-wrap:anywhere; line-height:1.35; }}
+    .review-form {{ display:grid; grid-template-columns:190px minmax(180px,1fr) auto minmax(150px,auto); gap:10px; align-items:end; }}
+    .review-form label {{ display:grid; gap:5px; color:var(--muted); font-size:12px; font-weight:700; }}
+    .review-form select,.review-form textarea {{ width:100%; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; color:var(--ink); }}
+    .review-form textarea {{ resize:vertical; min-height:42px; }}
+    .save-state {{ color:var(--muted); font-size:13px; align-self:center; }}
+    @media (max-width:1120px) {{ .action-grid,.mini-stats {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .dashboard-grid,.hero,.three-grid {{ grid-template-columns:1fr; }} .links {{ justify-content:flex-start; }} }}
+    @media (max-width:980px) {{ .metrics,.file-grid {{ grid-template-columns:repeat(3,1fr); }} .split-grid {{ grid-template-columns:1fr; }} }}
+    @media (max-width:760px) {{ .review-details,.review-form {{ grid-template-columns:1fr; }} .dialog-top {{ display:grid; }} .action-grid,.mini-stats {{ grid-template-columns:1fr; }} }}
+    @media (max-width:640px) {{ main,header,.hub-nav {{ padding-left:16px; padding-right:16px; }} .metrics,.file-grid {{ grid-template-columns:1fr 1fr; }} .data-table {{ display:block; overflow-x:auto; }} h1 {{ font-size:28px; }} }}
+  </style>
 </head>
 <body>
-  <header class="site-header">
+  <header>
     <div class="hero">
-      <div class="hero-copy">
-        <h1>A FUND Solution Command Center</h1>
-        <p class="sub">Friendly safe-mode view. The FUNDz workspace is awake as one source for local reporting, but inactive for client-facing sends, live replies, DF/AutoFox edits, and webhook wiring.</p>
+      <div class="hero-card">
+        <p class="eyebrow">Safe autonomous hub</p>
+        <h1>FUNDz Command Center</h1>
+        <p class="sub">Friendly safe-mode view. FUNDz is awake for local reporting, but inactive for client-facing sends, live replies, DF/AutoFox edits, and webhook wiring.</p>
         <div class="chips">{chips}</div>
       </div>
+      <div class="hero-card">
+        <p class="eyebrow">Right now</p>
+        <h2>{html.escape(display_text(next_action.get('value'), 'Review the local board'))}</h2>
+        <p class="sub">{html.escape(display_text(blocked.get('value'), 'No current blocker recorded.'))}</p>
+        <div class="chips">
+          {render_chip("Proof", display_text(proof.get('value'), "Required"), "warn")}
+          {render_chip("Generated", generated, "info")}
+        </div>
+      </div>
     </div>
-    <nav class="nav-grid" aria-label="A FUND Solution Command Center pages">{links}</nav>
   </header>
+  <nav class="hub-nav">
+    <a href="#mission">Mission</a>
+    <a href="#actions">Actions</a>
+    <a href="#workload">Workload</a>
+    <a href="#next-queue">Next Queue</a>
+    <a href="#clients">Clients</a>
+    <a href="#money">Money</a>
+    <a href="#activity">Activity</a>
+    {links}
+  </nav>
   <main>
-    <div class="metrics">{card_html}</div>
-    <section style="margin-bottom:16px">
-      <h2>One Command Center</h2>
-      {operating_map}
+    <section id="mission">
+      {render_section_title("Snapshot", "Everything important at a glance", "Live work stays gated while the hub shows what needs attention, what is queued, and where the evidence lives.")}
+      <div class="metrics">{card_html}</div>
+      <div class="mini-stats">{health_stats}</div>
     </section>
-    <div class="grid">
-      <section>
-        <h2>Now</h2>
+    <section id="actions">
+      {render_section_title("Action deck", "Start here", "Highest-impact queues, controls, and proof surfaces sit at the top.")}
+      <div class="action-grid">{action_tiles}</div>
+    </section>
+    {owner_review_panel}
+    <div class="dashboard-grid">
+      <div>
+        <section id="today">
+        {render_section_title("Daily board", "Now", "The current local objective and blocker state.")}
         {daily}
+        </section>
+        <section id="next-queue">
+        {render_section_title("Queue preview", "Next queued messages", "Message bodies are visible here; approval gates still decide whether anything can send.")}
+        {queue}
+        </section>
+        <section id="clients">
+        {render_section_title("Client radar", "Communication control board", "The most sensitive client rows are surfaced first so the page feels like a cockpit instead of a spreadsheet.")}
+        {client_watch}
+        </section>
+      </div>
+      <aside>
+        <section id="workload">
+        {render_section_title("Workload", "Queue shape", "Status, lane, and communication counts from the local boards.")}
+        <div class="split-grid">
+          <div>{queue_bars}</div>
+          <div>{lane_bars}</div>
+        </div>
+        </section>
+        <section>
+        {render_section_title("Communication", "Client status mix", "")}
+        {comm_bars}
+        </section>
+        <section id="money">
+        {render_section_title("Money watch", "Billing and cleanup", "ScoreFusion and maintenance rows that can affect outreach readiness.")}
+        {billing_watch}
+        </section>
+      </aside>
+    </div>
+    <div class="three-grid" style="margin-top:16px">
+      <section>
+        {render_section_title("Local actions", "Top local actions", "")}
+        {top_actions}
+      </section>
+      <section id="activity">
+        {render_section_title("Activity", "Recent local receipts", "")}
+        {activity_feed}
       </section>
       <section>
-        <h2>Next Queued Messages</h2>
-        {queue}
+        {render_section_title("Files", "Open the source boards", "")}
+        <div class="file-grid">{file_tiles}</div>
       </section>
     </div>
-    <section style="margin-top:16px">
-      <h2>Top Local Actions</h2>
-      {top_actions}
-    </section>
     <p class="sub">Generated: {generated}. This page can refresh boards and show queues; it does not approve or send anything by itself.</p>
   </main>
+  {owner_review_script}
 </body>
 </html>
 """
@@ -1031,7 +890,7 @@ def render_locked_page() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A FUND Solution Command Center Locked</title>
+  <title>FUNDz Command Center Locked</title>
   <style>
     :root { color-scheme: light; --ink:#172026; --muted:#64737b; --line:#d9e2e5; --mint:#dff7ea; --mint-ink:#115e3b; --gold:#fff0c7; --gold-ink:#7a4f00; --sky:#e3f2ff; --sky-ink:#075985; }
     * { box-sizing:border-box; }
@@ -1049,7 +908,7 @@ def render_locked_page() -> str:
 </head>
 <body>
   <main>
-    <h1>A FUND Solution Command Center is protected</h1>
+    <h1>FUNDz Command Center is protected</h1>
     <p>The plain domain is the locked front door. Use the saved owner link on this Mac to open the dashboard with the private token already attached.</p>
     <div class="chips">
       <span class="chip good">FUNDz inactive for client sends</span>
@@ -1077,6 +936,24 @@ class CommandCenterHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
+
+    def send_json(self, status: int, payload: dict[str, Any]) -> None:
+        self.send_body(status, json.dumps(payload), "application/json; charset=utf-8")
+
+    def read_request_json(self) -> dict[str, Any]:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if length <= 0 or length > 20_000:
+            raise ValueError("Invalid request body.")
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Invalid JSON request body.") from error
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object.")
+        return payload
 
     def token_from_request(self) -> str:
         parsed = urlparse(self.path)
@@ -1106,23 +983,31 @@ class CommandCenterHandler(BaseHTTPRequestHandler):
             ok, detail = refresh_command_center()
             self.send_body(200 if ok else 500, json.dumps({"ok": ok, "detail": detail}), "application/json; charset=utf-8")
             return
-        if parsed.path.startswith("/view/"):
-            slug = parsed.path.removeprefix("/view/").strip("/")
-            if slug not in SAFE_FILES:
-                self.send_body(404, "Unknown A FUND Solution Command Center page.\n", "text/plain; charset=utf-8")
-                return
-            self.send_body(200, render_file_page(slug, getattr(self.server, "fundz_token")))  # type: ignore[attr-defined]
-            return
         if parsed.path.startswith("/files/"):
             slug = parsed.path.removeprefix("/files/").strip("/")
             target = SAFE_FILES.get(slug)
             if not target:
-                self.send_body(404, "Unknown A FUND Solution Command Center file.\n", "text/plain; charset=utf-8")
+                self.send_body(404, "Unknown Command Center file.\n", "text/plain; charset=utf-8")
                 return
             content_type = "application/json; charset=utf-8" if target.suffix == ".json" else "text/plain; charset=utf-8"
             self.send_body(200, read_text(target), content_type)
             return
         self.send_body(404, "Not found.\n", "text/plain; charset=utf-8")
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if not self.authorized():
+            self.send_json(403, {"ok": False, "error": "Owner token required."})
+            return
+        if parsed.path == "/review-action":
+            try:
+                saved = save_owner_review_action(self.read_request_json())
+            except ValueError as error:
+                self.send_json(400, {"ok": False, "error": str(error)})
+                return
+            self.send_json(200, {"ok": True, **saved})
+            return
+        self.send_json(404, {"ok": False, "error": "Not found."})
 
 
 def run_server(host: str, port: int) -> None:
@@ -1140,8 +1025,8 @@ def run_server(host: str, port: int) -> None:
     write_json(DOMAIN_CONFIG, config)
     server = ThreadingHTTPServer((host, port), CommandCenterHandler)
     setattr(server, "fundz_token", token)
-    print(f"A FUND Solution Command Center listening on http://{host}:{port}")
-    print(f"Owner URL: https://{command_center_hostname()}/?token={token}")
+    print(f"FUNDz Command Center listening on http://{host}:{port}")
+    print("Owner URL: stored locally in data/local/command-center/fundz-command-center-domain.json")
     server.serve_forever()
 
 
