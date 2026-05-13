@@ -3,8 +3,10 @@
 ## Status: Safe Local Autonomy / Sleep Mode
 
 FUNDz is currently parked from live client operations: fun, locally autonomous,
-inactive for client sends, and not sending clients. Brandon explicitly woke the
-local autonomous-operator and iMessage fallback LaunchAgents on May 8, 2026.
+inactive for client sends, and not sending clients. The local autonomous
+operator is enabled for weekly dry-run safety checks; the iMessage fallback
+LaunchAgent is currently parked/disabled unless Brandon confirms he wants
+owner-command fallback awake again.
 Start with `FUNDZ_SLEEP_MODE.md` before doing any operational work. Use
 `make autonomous` for safe local board/intake/maintenance refreshes, and use
 `make inactive` to stop the local bridge, tunnel, poller, and iMessage fallback
@@ -372,11 +374,24 @@ Before wiring the public webhook into Credit Tracker/AutoFox, run a signed test-
 make webhook-probe
 ```
 
+Before any approved live customer-service reply, generate the runtime wake proof checklist:
+
+```sh
+make runtime-wake-checklist
+```
+
+This is a no-wake command-center surface. It inspects local screens/processes, kill switch state, dry-run/approval flags, and proof receipt paths, then writes:
+
+- `data/local/command-center/fundz-runtime-wake-proof-checklist.md`
+- `data/local/command-center/fundz-runtime-wake-proof-checklist.json`
+
+The checklist does not start the bridge, tunnel, poller, webhook, or any send path. It must show a ready-for-approved-wake status before the operator wakes a named route, runs health checks, captures the test-only probe/preview proof, sends the single approved reply, and parks the runtime again.
+
 ### HighLevel Inbox Fallback
 
 If Cloudflare or the Credit Tracker webhook is not stable, FUNDz can poll HighLevel conversations directly. This lets inbound client texts reach FUNDz without a public tunnel.
 
-FUNDz treats Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and HighLevel app/portal conversation rows as customer-service intake. Local intake can classify and remember those messages without sending a live reply. Live replies remain approval-gated and should not be enabled until the current app/portal route is reverified with a test-only webhook or a fresh HighLevel conversation snapshot.
+FUNDz treats Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and HighLevel app/portal conversation rows as customer-service intake. Local intake can classify and remember those messages without sending a live reply. Broad autonomous replies stay blocked; the live path is limited to one controlled, approved, non-sensitive app/portal reply at a time.
 
 Preview mode, no sends:
 
@@ -394,11 +409,18 @@ Live replies require all of these:
 
 - `CREDIT_TRACKER_DRY_RUN=false`
 - `FUNDZ_HIGHLEVEL_POLLER_LIVE=true`
+- `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true` for the action window
+- command-center kill switch off in `data/local/command-center/fundz-send-kill-switch.json`
+- business hours, or `FUNDZ_ALLOW_AFTER_HOURS_SENDS=true` for a specific approved exception
+- an inbound app/portal proof signal, such as `App Message`, `TYPE_APP_MESSAGE`, `Mobile App SMS`, Credit Tracker, DisputeFox portal, or equivalent source/channel proof
+- no sensitive/proof-dependent labels: billing, cancellation, complaint, document request, app access, score concern, or dispute update
 - a HighLevel token with conversation-read and message-send scopes
+
+Successful controlled live replies write `data/local/highlevel-inbox-poller/reply-receipts.jsonl`. If any gate fails, the poller logs a hold instead of sending.
 
 If the poller reports `The token is not authorized for this scope`, update the HighLevel Private Integration scopes to include conversation/message read access, then rerun the preview command.
 
-If HighLevel API permissions are blocked, use the manual inbox workaround. Export/copy business-only HighLevel conversation rows to `data/local/highlevel-inbox-manual-imports/` as CSV, JSON, TXT, or Markdown, then run:
+If HighLevel API permissions are blocked or the app/portal event is only visible in DF/Credit Tracker admin, use the manual inbox workaround. Export/copy business-only HighLevel, DF, or Credit Tracker conversation rows to `data/local/highlevel-inbox-manual-imports/` as CSV, JSON, TXT, or Markdown, then run:
 
 ```sh
 make highlevel-inbox-workaround
@@ -412,12 +434,34 @@ App/portal proof receipts are also written locally when the poller or manual wor
 - `data/local/highlevel-inbox-poller/app-portal-event-proof.md`
 
 These files are proof-only. They do not send replies or edit HighLevel, DF, AutoFox, billing, or campaigns.
+For the cleanest manual app/portal proof, include export columns such as `lastMessageType`, `channel`, `source`, `contact_id`, `conversation_id`, `date`, and `last message`. Plain SMS rows are not treated as app/portal proof unless the channel/source, message type, or message text clearly identifies the Credit Tracker app, DisputeFox portal, App Message, or Mobile App SMS.
+
+Browser screenshots can prove a one-off app/portal event, but they graduate into the repeatable API/manual/import proof path only when the copied/exported row preserves enough source mapping for the receipt:
+
+- message type: `App Message`, `TYPE_APP_MESSAGE`, `Mobile App SMS`, or another explicit app/portal type
+- source/channel: `disputefox`, `credit-tracker`, `portal`, `mobile_app_sms`, `app_message`, or another clear app/portal source
+- identity/timeline: contact name plus `contact_id` or `conversation_id` when available, and the message date/time
+- receipt: `app-portal-event-proof.jsonl` includes `proof_status` such as `captured_from_manual_import_no_send` or `captured_from_highlevel_poll_no_send`
+
+If those source fields are missing, keep the browser receipt as browser-only proof and do not treat the row as reusable API/manual/import evidence.
+
+One-client fresh app/portal proof process:
+
+1. Pick one named client and capture one fresh inbound app/portal message only. Do not reply from this proof step.
+2. Export or copy one business-only row into `data/local/highlevel-inbox-manual-imports/`.
+3. Include these fields whenever the source has them: `contact`, `last message`, `date`, `direction`, `contact_id`, `conversation_id`, `lastMessageType` or `messageType`, `channel`, and `source`.
+4. Run `make highlevel-inbox-workaround`.
+5. Pass means `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` gets a new row for that client with `proof_status=captured_from_manual_import_no_send`, an app/portal signal from message type or source/channel, and no send receipt.
+6. Fail means no app/portal proof row is written, the row is plain SMS/browser-only, contact or conversation identity is missing, or the classification is sensitive/proof-dependent.
+7. Graduation to controlled live-reply eligibility requires all of the pass conditions plus owner approval for that one client, contact resolution, non-sensitive classification, command-center kill switch off, live-reply approval flags for the action window, and writable reply receipts. It still does not approve broad autonomous replies.
 
 To diagnose a real webhook payload before enabling live sends:
 
 ```sh
 scripts/fundz_credit_tracker_diagnose.py /path/to/payload.json
 ```
+
+Webhook-driven live replies also require `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true` for the specific action window, the Command Center kill switch off, dry-run off, and the normal webhook signature/dedupe/DND checks. Test-only probes do not need this flag and do not send.
 
 To resolve a client email or phone into the real HighLevel contact ID before a pilot:
 

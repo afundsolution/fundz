@@ -55,6 +55,7 @@ class FundzAutonomyTests(unittest.TestCase):
             mock.patch.object(bridge, "STATE_DIR", self.bridge_dir),
             mock.patch.object(bridge, "EVENT_LOG", self.bridge_dir / "credit-tracker-bridge.jsonl"),
             mock.patch.object(bridge, "SEEN_EVENTS", self.bridge_dir / "seen-events.txt"),
+            mock.patch.object(bridge, "SEND_KILL_SWITCH_JSON", self.base / "kill-switch.json"),
         ]
         for patcher in self.path_patches:
             patcher.start()
@@ -152,6 +153,39 @@ class FundzAutonomyTests(unittest.TestCase):
         self.assertFalse(result["sent"])
         self.assertTrue(result["dry_run"])
         self.assertTrue(bridge.EVENT_LOG.exists())
+
+    def test_send_reply_refuses_live_when_kill_switch_enabled(self) -> None:
+        os.environ.update(
+            {
+                "CREDIT_TRACKER_DRY_RUN": "false",
+                "CREDIT_TRACKER_REPLY_URL": "https://example.test/reply",
+                "CREDIT_TRACKER_API_TOKEN": "token",
+            }
+        )
+        bridge.SEND_KILL_SWITCH_JSON.write_text(
+            json.dumps({"enabled": True, "reason": "Owner pause"}),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(bridge.SendKillSwitchEnabled):
+            bridge.send_reply(self.valid_payload(), "Safe reply.")
+
+    def test_webhook_live_reply_requires_controlled_approval_flag(self) -> None:
+        self.assertIn("approval flag is off", bridge.webhook_live_reply_gate_reason())
+
+        with mock.patch.dict(os.environ, {"FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED": "true"}, clear=False):
+            self.assertEqual(bridge.webhook_live_reply_gate_reason(), "")
+
+    def test_webhook_live_reply_gate_respects_kill_switch(self) -> None:
+        bridge.SEND_KILL_SWITCH_JSON.write_text(
+            json.dumps({"enabled": True, "reason": "Owner pause"}),
+            encoding="utf-8",
+        )
+
+        with mock.patch.dict(os.environ, {"FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED": "true"}, clear=False):
+            reason = bridge.webhook_live_reply_gate_reason()
+
+        self.assertIn("send kill switch is ON", reason)
 
     def test_webhook_probe_flag_is_test_only(self) -> None:
         payload = self.valid_payload()

@@ -103,6 +103,11 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertEqual(report["scorefusion"]["enrolled"], 2)
         self.assertIn("backlog_coverage", report)
         self.assertIn("no_approval_work_queue", report)
+        self.assertIn("customer_service_readiness", report)
+        self.assertIn("broad autonomous replies blocked", report["customer_service_readiness"]["state"])
+        self.assertIn("broad_autonomous_rollout_gate", report)
+        self.assertFalse(report["broad_autonomous_rollout_gate"]["mode_enabled"])
+        self.assertEqual(report["broad_autonomous_rollout_gate"]["current_cap"], "0 broad autonomous replies.")
 
     def test_pilot_status_report_reads_provider_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -224,6 +229,7 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "GAP_CLOSURE_MD": base / "gaps.md",
                 "MISSING_STEPS_RECHECK_MD": base / "missing.md",
                 "BUSINESS_REVIEW_ROLLOUT_MD": base / "business-rollout.md",
+                "BROAD_AUTONOMOUS_ROLLOUT_GATE_MD": base / "broad-rollout-gate.md",
                 "PREVIEW_PACKET_DECISION_MD": base / "preview-decision.md",
                 "BILLING_ROLLOUT_TRIAGE_MD": base / "billing-triage.md",
                 "BILLING_ROLLOUT_TRIAGE_CSV": base / "billing-triage.csv",
@@ -272,6 +278,7 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertTrue((base / "gaps.md").exists())
             self.assertTrue((base / "missing.md").exists())
             self.assertTrue((base / "business-rollout.md").exists())
+            self.assertTrue((base / "broad-rollout-gate.md").exists())
             self.assertTrue((base / "preview-decision.md").exists())
             self.assertTrue((base / "billing-triage.md").exists())
             self.assertTrue((base / "billing-triage.csv").exists())
@@ -288,6 +295,7 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("owner-actions.md", paths["owner_review_actions"])
             self.assertIn("no-recent-investigation.md", paths["no_recent_contact_investigation"])
             self.assertIn("business-rollout.md", paths["business_review_rollout"])
+            self.assertIn("broad-rollout-gate.md", paths["broad_autonomous_rollout_gate"])
             self.assertIn("preview-decision.md", paths["preview_packet_decision"])
             self.assertIn("billing-triage.md", paths["billing_rollout_triage"])
             self.assertIn("billing-maintenance.md", paths["billing_maintenance_focus"])
@@ -383,6 +391,13 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("Round Updates", text)
             self.assertIn("Education / Credit Tips", text)
             self.assertIn("Problem / Owner Review", text)
+            self.assertIn("Completed Tip 04 Proof", text)
+            self.assertIn("Step 9 - Credit Tip 04 - Statement Dates (24 Days)", text)
+            self.assertIn("Interval Value = 24", text)
+            self.assertIn("FUNDz marker - Credit Tip 04 Step 9", text)
+            self.assertIn("Next controlled target: Credit Tip 05 only", text)
+            self.assertIn("autofox-credit-tip-04-step9-operator-preflight-20260513.md", text)
+            self.assertIn("No manual client send or campaign assignment was performed", text)
             self.assertIn("Credit Tip 20 - Long-Term Habits", text)
             self.assertIn("Owner Review - App SMS Failed", text)
             self.assertEqual(len(tip_rows), 20)
@@ -1448,10 +1463,40 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "generated_at": "2026-05-08T12:00:00-0500",
                 "summary": {"active_clients": 2, "owner_review_before_message": 1, "action_counts": {}},
                 "daily_board": [],
-                "work_queue": [],
+                "work_queue": [
+                    {"queue_status": "Approved"},
+                    {"queue_status": "Needs Brandon"},
+                    {"queue_status": "Done"},
+                    {"queue_status": "Proof Needed"},
+                ],
                 "communication_control_board": [],
                 "governor_alerts": [],
                 "blockers": [],
+                "customer_service_readiness": {
+                    "state": "Owner-reviewed customer service only; broad autonomous replies blocked.",
+                    "safe_now": ["Local customer-service prep with no send."],
+                    "controlled_live_eligible": ["One named, owner-approved app/portal reply with receipt capture."],
+                    "broad_autonomous_blocked": ["No approval exists for broad autonomous third-party replies."],
+                    "proof": {
+                        "owner_roundtrip_proven": True,
+                        "manual_or_api_app_portal_events": 1,
+                        "readiness_packet": "data/local/command-center/fundz-customer-service-readiness-2026-05-13.md",
+                        "production_routing": "data/local/command-center/fundz-production-verification-2026-05-13.md",
+                        "manual_or_api_event_proof": "data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl",
+                        "owner_roundtrip_receipts": ["data/local/semi-autonomous/receipts/brandon-jordan-df-portal-reply-proof-20260513.md"],
+                    },
+                },
+                "broad_autonomous_rollout_gate": {
+                    "state": "blocked_not_enabled",
+                    "mode_enabled": False,
+                    "scope": "Customer-service app/portal replies only.",
+                    "current_cap": "0 broad autonomous replies.",
+                    "next_controlled_cap": "1 named client, 1 app/portal inbound, 1 exact approved reply, 1 receipt.",
+                    "first_client_proof_required": ["Named client and owner approval for that exact client before live action."],
+                    "expansion_rules": ["After one clean third-party proof, the next cap is 3 named clients."],
+                    "rollback_or_park": ["Run `make inactive` to park local live runtimes."],
+                    "still_blocks_broad_mode": ["No explicit Brandon approval exists for broad autonomous third-party replies."],
+                },
             }
 
             command_center.write_markdown(report, path)
@@ -1460,6 +1505,42 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("## Operating Map", text)
             self.assertIn("A FUND Solution has one Command Center", text)
             self.assertIn("Message receipts and gates", text)
+            self.assertIn("## Queue Truth", text)
+            self.assertIn("Approved: 1 prepared-but-gated row(s)", text)
+            self.assertIn("Done/Sent: 1 receipt-backed outcome(s)", text)
+            self.assertIn("## Customer-Service Readiness", text)
+            self.assertIn("Safe Now", text)
+            self.assertIn("Controlled-Live Eligible", text)
+            self.assertIn("Broad Autonomous Replies Still Blocked", text)
+            self.assertIn("broad autonomous replies blocked", text)
+            self.assertIn("## Customer-Service Live Reply Gate", text)
+            self.assertIn("Broad autonomous replies: blocked", text)
+            self.assertIn("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true", text)
+            self.assertIn("## Broad Autonomous Rollout Gate", text)
+            self.assertIn("Broad mode enabled: False", text)
+            self.assertIn("Current cap: 0 broad autonomous replies", text)
+            self.assertIn("Next controlled cap: 1 named client", text)
+            self.assertIn("Rollback / park: `make inactive`", text)
+
+    def test_broad_autonomous_rollout_gate_file_keeps_broad_mode_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "broad-rollout-gate.md"
+            report = {
+                "generated_at": "2026-05-13T12:00:00-0500",
+                "broad_autonomous_rollout_gate": command_center.build_broad_autonomous_rollout_gate(),
+            }
+
+            command_center.write_broad_autonomous_rollout_gate(report, path)
+
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("Broad autonomous mode is not enabled", text)
+            self.assertIn("Current cap: 0 broad autonomous replies", text)
+            self.assertIn("Next controlled cap: 1 named client", text)
+            self.assertIn("## First-Client Proof Requirements", text)
+            self.assertIn("## Expansion Rules", text)
+            self.assertIn("## Rollback / Park Command", text)
+            self.assertIn("Run `make inactive`", text)
+            self.assertIn("## Still Blocks Broad Mode", text)
 
     def test_daily_board_outputs_exactly_five_lines(self) -> None:
         report = {
@@ -1703,6 +1784,88 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertEqual(rows[0]["proof"], "proof.md")
         self.assertEqual(rows[0]["evidence"], "proof.md")
         self.assertIn("app_access_proof_captured", rows[0]["safe_fix_applied"])
+
+    def test_billing_proof_map_blocks_unresolved_approved_row(self) -> None:
+        report = {
+            "generated_at": "2026-05-13T10:00:00-0500",
+            "ledger": [
+                {
+                    "client_key": "name:ashley-foster",
+                    "client_name": "Ashley Foster",
+                    "next_touch_status": "owner-review-before-message",
+                    "phase": "billing-review",
+                    "priority_score": "205",
+                    "flags": "payment_attention",
+                }
+            ],
+            "blockers": [],
+        }
+        billing_map = {
+            "ashley foster": {
+                "local_decision": "still_billing_issue",
+                "proof_found": "Reminder receipt exists, but active billing issue remains.",
+                "missing_live_receipt": "Payment receipt or billing-system clearance after reminder.",
+                "next_action": "Do not resend; wait for payment proof.",
+                "evidence": "receipt.md",
+            }
+        }
+
+        with (
+            mock.patch.object(command_center, "load_owner_decisions", return_value={"ashley foster": {"owner_decision": "approved"}}),
+            mock.patch.object(command_center, "load_queue_suppressions", return_value={}),
+            mock.patch.object(command_center, "failed_rollout_clients", return_value={}),
+            mock.patch.object(command_center, "app_recovery_proofs", return_value={}),
+            mock.patch.object(command_center, "load_billing_revenue_proof_map", return_value=billing_map),
+            mock.patch.object(command_center, "highlevel_reply_work_queue_rows", return_value=[]),
+        ):
+            rows = command_center.build_work_queue(report)
+
+        row = rows[0]
+        self.assertEqual(row["queue_status"], "Blocked")
+        self.assertEqual(row["evidence"], "receipt.md")
+        self.assertEqual(row["proof"], "Reminder receipt exists, but active billing issue remains.")
+        self.assertIn("billing_revenue_proof_map", row["safe_fix_applied"])
+        self.assertIn("Billing/payment proof is still missing", row["do_not_send_because"])
+
+    def test_billing_proof_map_closes_archive_receipt_row(self) -> None:
+        report = {
+            "generated_at": "2026-05-13T10:00:00-0500",
+            "ledger": [
+                {
+                    "client_key": "name:victoria-robinson",
+                    "client_name": "Victoria Robinson",
+                    "next_touch_status": "owner-review-before-message",
+                    "phase": "billing-review",
+                    "priority_score": "145",
+                    "flags": "payment_attention",
+                }
+            ],
+            "blockers": [],
+        }
+        billing_map = {
+            "victoria robinson": {
+                "local_decision": "archive_closed_locally",
+                "proof_found": "Authenticated DF archive receipt found.",
+                "next_action": "Do not send reminder or reopen archive work.",
+                "evidence": "archive.json",
+            }
+        }
+
+        with (
+            mock.patch.object(command_center, "load_owner_decisions", return_value={"victoria robinson": {"owner_decision": "approved"}}),
+            mock.patch.object(command_center, "load_queue_suppressions", return_value={}),
+            mock.patch.object(command_center, "failed_rollout_clients", return_value={}),
+            mock.patch.object(command_center, "app_recovery_proofs", return_value={}),
+            mock.patch.object(command_center, "load_billing_revenue_proof_map", return_value=billing_map),
+            mock.patch.object(command_center, "highlevel_reply_work_queue_rows", return_value=[]),
+        ):
+            rows = command_center.build_work_queue(report)
+
+        row = rows[0]
+        self.assertEqual(row["queue_status"], "Done")
+        self.assertEqual(row["evidence"], "archive.json")
+        self.assertEqual(row["proof"], "Authenticated DF archive receipt found.")
+        self.assertIn("Archive receipt recorded", row["do_not_send_because"])
 
     def test_queue_suppression_overrides_failed_row_without_deleting_evidence(self) -> None:
         report = {

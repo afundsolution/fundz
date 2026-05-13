@@ -1,4 +1,4 @@
-.PHONY: start handoff memory-check command-center command-center-domain daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe supabase-memory-sync supabase-dashboard-sql inactive test
+.PHONY: start handoff memory-check command-center command-center-domain runtime-wake-checklist daily-board autonomous autonomous-watch maintenance-autopilot client-billing personal-phone-queue intake-governor intake-governor-visual phone-app-intake slackbot-team-sequence ai-router autofox-rollout owner-pre-send-notice imessage-fallback highlevel-inbox-workaround webhook-probe supabase-memory-sync supabase-dashboard-sql inactive test
 
 start:
 	sh scripts/start-session.sh
@@ -14,6 +14,9 @@ command-center:
 
 command-center-domain:
 	zsh scripts/fundz_command_center_domain_setup.sh
+
+runtime-wake-checklist:
+	python3 scripts/fundz_runtime_wake_checklist.py
 
 daily-board:
 	python3 scripts/fundz_command_center.py --limit 10
@@ -44,6 +47,9 @@ intake-governor-visual:
 
 phone-app-intake:
 	python3 scripts/fundz_phone_app_intake.py
+
+slackbot-team-sequence:
+	python3 scripts/fundz_slackbot_team_sequence.py
 
 ai-router:
 	python3 scripts/fundz_ai_router.py --prompt "$(PROMPT)"

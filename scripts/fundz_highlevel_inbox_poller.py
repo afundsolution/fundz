@@ -8,9 +8,11 @@ import csv
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +43,7 @@ APP_PORTAL_PROOF_MD = STATE_DIR / "app-portal-event-proof.md"
 MANUAL_IMPORT_DIR = ROOT / "data" / "local" / "highlevel-inbox-manual-imports"
 MANUAL_QUEUE_CSV = STATE_DIR / "manual-inbox-workaround.csv"
 MANUAL_QUEUE_MD = STATE_DIR / "manual-inbox-workaround.md"
+SEND_KILL_SWITCH_JSON = ROOT / "data" / "local" / "command-center" / "fundz-send-kill-switch.json"
 
 DEFAULT_CONVERSATIONS_URL = "https://services.leadconnectorhq.com/conversations/search"
 
@@ -87,6 +90,14 @@ APP_PORTAL_SIGNAL_TERMS = {
 }
 
 
+def text_matches_pattern(text: str, pattern: str) -> bool:
+    if not pattern:
+        return False
+    if pattern == "?":
+        return "?" in text
+    return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(pattern.lower())}(?![A-Za-z0-9])", text.lower()))
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -99,6 +110,34 @@ def env_int(name: str, default: int) -> int:
         return int(os.getenv(name, str(default)))
     except ValueError:
         return default
+
+
+def read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def send_kill_switch_enabled(path: Path | None = None) -> tuple[bool, str]:
+    if env_bool("FUNDZ_SEND_KILL_SWITCH") or env_bool("FUNDZ_COMMAND_CENTER_KILL_SWITCH"):
+        return True, "environment kill switch is enabled"
+    state = read_json(path or SEND_KILL_SWITCH_JSON)
+    if not isinstance(state, dict):
+        return False, "kill switch file missing or unreadable; defaulting to approval gates"
+    enabled = str(state.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
+    return enabled, str(state.get("reason") or "command-center kill switch is on").strip()
+
+
+def send_window_status(now: datetime | None = None) -> tuple[bool, str]:
+    if env_bool("FUNDZ_ALLOW_AFTER_HOURS_SENDS", False):
+        return True, "after-hours override enabled"
+    now = now or datetime.now()
+    if now.weekday() >= 5:
+        return False, "weekend live replies are blocked by FUNDz safety policy"
+    if now.hour < 9 or now.hour >= 21:
+        return False, "live replies are allowed only from 9 AM to 9 PM local time"
+    return True, "inside approved live-reply window"
 
 
 def write_poll_log(kind: str, payload: dict[str, Any]) -> None:
@@ -138,7 +177,7 @@ def classify_inbound_reply(text: str) -> dict[str, Any]:
     labels = [
         label
         for label, patterns in REPLY_CLASS_PATTERNS.items()
-        if any(pattern in lower for pattern in patterns)
+        if any(text_matches_pattern(lower, pattern) for pattern in patterns)
     ]
     if not labels:
         labels = ["no_action"]
@@ -280,7 +319,7 @@ def app_portal_signals(payload: dict[str, Any]) -> list[str]:
         payload.get("source_file"),
     ]
     haystack = " ".join(str(value or "") for value in values).lower()
-    return sorted(term for term in APP_PORTAL_SIGNAL_TERMS if term in haystack)
+    return sorted(term for term in APP_PORTAL_SIGNAL_TERMS if text_matches_pattern(haystack, term))
 
 
 def is_app_portal_payload(payload: dict[str, Any], classification: dict[str, Any] | None = None) -> bool:
@@ -426,6 +465,40 @@ def live_reply_hold_reason(classification: dict[str, Any]) -> str:
     return ""
 
 
+def reply_receipt_logging_ready(path: Path | None = None) -> tuple[bool, str]:
+    path = path or REPLY_RECEIPTS
+    parent = path.parent
+    if not parent.exists():
+        return False, f"reply receipt directory is missing: {parent}"
+    if not parent.is_dir():
+        return False, f"reply receipt parent is not a directory: {parent}"
+    if not os.access(parent, os.W_OK):
+        return False, f"reply receipt directory is not writable: {parent}"
+    return True, "reply receipt path ready"
+
+
+def controlled_live_reply_gate_reason(payload: dict[str, Any], classification: dict[str, Any]) -> str:
+    if env_bool("CREDIT_TRACKER_DRY_RUN", True):
+        return "CREDIT_TRACKER_DRY_RUN is true"
+    if not env_bool("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED", False):
+        return "controlled live reply approval flag is off"
+    kill_enabled, kill_reason = send_kill_switch_enabled()
+    if kill_enabled:
+        return "send kill switch is ON: " + kill_reason
+    window_ok, window_reason = send_window_status()
+    if not window_ok:
+        return window_reason
+    if not app_portal_signals(payload):
+        return "app/portal proof signal required before live customer-service reply"
+    hold_reason = live_reply_hold_reason(classification)
+    if hold_reason:
+        return hold_reason
+    receipt_ready, receipt_reason = reply_receipt_logging_ready()
+    if not receipt_ready:
+        return receipt_reason
+    return ""
+
+
 def write_reply_receipt(payload: dict[str, Any], reply: str, send_result: dict[str, Any], classification: dict[str, Any]) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     row = {
@@ -520,6 +593,14 @@ def normalize_message_type(raw: str) -> str:
     return "SMS"
 
 
+def normalized_row_channel(row: dict[str, Any]) -> str:
+    return row_value(row, "channel", "messageChannel", "message_channel")
+
+
+def normalized_row_source(row: dict[str, Any], default: str = "") -> str:
+    return row_value(row, "source", "messageSource", "message_source", "provider") or default
+
+
 def contact_name(conversation: dict[str, Any]) -> str:
     contact = conversation.get("contact")
     if isinstance(contact, dict):
@@ -552,11 +633,13 @@ def normalize_conversation(conversation: dict[str, Any], location_id: str) -> di
     message_id = conversation_message_id(conversation)
     message_type = normalize_message_type(str(conversation.get("lastMessageType") or conversation.get("messageType") or ""))
     name = contact_name(conversation)
+    channel = str(conversation.get("channel") or conversation.get("messageChannel") or "").strip()
+    source = str(conversation.get("source") or conversation.get("messageSource") or "highlevel-poller").strip()
     payload = {
         "event_id": message_id,
         "message_id": message_id,
-        "source": "highlevel-poller",
-        "channel": "credit-tracker",
+        "source": source,
+        "channel": channel,
         "direction": "inbound",
         "type": "InboundMessage",
         "messageType": message_type,
@@ -604,9 +687,9 @@ def normalize_manual_row(row: dict[str, Any], source: Path, index: int, location
     payload = {
         "event_id": message_id,
         "message_id": message_id,
-        "source": "highlevel-manual-import",
+        "source": normalized_row_source(row, "highlevel-manual-import"),
         "source_file": str(source),
-        "channel": "credit-tracker",
+        "channel": normalized_row_channel(row),
         "direction": direction,
         "type": "InboundMessage",
         "messageType": normalize_message_type(row_value(row, "lastMessageType", "last_message_type", "messageType", "message_type", "channel", "type")),
@@ -676,7 +759,7 @@ def manual_queue_row(payload: dict[str, Any], classification: dict[str, Any]) ->
         "status": status,
         "owner": owner,
         "next_step": next_step,
-        "proof_required": "HighLevel export row or screenshot showing the inbound message.",
+        "proof_required": "HighLevel, DF, or Credit Tracker export row/screenshot showing the inbound message.",
         "evidence": payload.get("source_file", "manual import"),
     }
 
@@ -692,7 +775,7 @@ def write_manual_queue_outputs(rows: list[dict[str, Any]], summary: dict[str, An
     lines = [
         "# FUNDz HighLevel Inbox Workaround",
         "",
-        "This file is built from local HighLevel exports/copies because the HighLevel API token is still blocked.",
+        "This file is built from local HighLevel, DF, or Credit Tracker inbox exports/copies when the API path is blocked or incomplete.",
         "",
         f"- Imported: {summary['imported']}",
         f"- Needs Brandon: {summary['needs_brandon']}",
@@ -803,7 +886,7 @@ def handle_payload(payload: dict[str, Any], live: bool) -> dict[str, Any]:
         write_poll_log("reply_preview", {"message_id": message_id, "reply": reply, "classification": classification, "payload": payload})
         return {"handled": True, "sent": False, "preview": True, "reply": reply, "classification": classification}
 
-    hold_reason = live_reply_hold_reason(classification)
+    hold_reason = controlled_live_reply_gate_reason(payload, classification)
     if hold_reason:
         write_poll_log("reply_hold", {"message_id": message_id, "reason": hold_reason, "classification": classification, "payload": payload})
         mark_seen(message_id)
@@ -830,6 +913,8 @@ def poll_once(limit: int, status: str, live: bool) -> dict[str, Any]:
         raise SystemExit("Missing CREDIT_TRACKER_LOCATION_ID.")
     if live and env_bool("CREDIT_TRACKER_DRY_RUN", True):
         raise SystemExit("CREDIT_TRACKER_DRY_RUN is true; refusing live HighLevel poller replies.")
+    if live and not env_bool("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED", False):
+        raise SystemExit("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED is not true; refusing live HighLevel poller replies.")
 
     status_code, payload, conversations = fetch_conversations(location_id, limit, status)
     if not 200 <= status_code < 300:

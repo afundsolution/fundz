@@ -2,6 +2,210 @@
 
 ## 2026-05-13
 
+### Controlled Live AutoFox Tip 05-06 Completion
+
+- Continued the owner-approved one-at-a-time DF setup in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Saved `Step 10 - Credit Tip 05 - New Credit (31 Days)` with `Delay / Days / 31`, Mobile App SMS action `Credit Tip 05 - New Credit Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 05 Step 10`.
+- Saved `Step 11 - Credit Tip 06 - Alerts (38 Days)` with `Delay / Days / 38`, Mobile App SMS action `Credit Tip 06 - Alerts Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 06 Step 11`.
+- Verified both live rows show `Mobile App SMS`, `Note Created`, and `Details`, with status `In Progress / Active`.
+- Added proof receipts and screenshot: `data/local/semi-autonomous/receipts/autofox-credit-tip-05-step10-mobile-sms-note-proof-20260513.md`, `data/local/semi-autonomous/receipts/autofox-credit-tip-06-step11-mobile-sms-note-proof-20260513.md`, and `data/local/semi-autonomous/receipts/autofox-credit-tip-05-06-step10-11-mobile-sms-note-proof-20260513.png`.
+- Safety boundary held: no campaign assignment, manual client send, regular SMS removal, broad `Update Data Fields`, HighLevel live action, or billing edit.
+
+### Slackbot Team Sequence
+
+- Added the local Slackbot/Slack AI team-sequence generator at `scripts/fundz_slackbot_team_sequence.py`.
+- Added `make slackbot-team-sequence`.
+- Added focused tests in `tests/test_fundz_slackbot_team_sequence.py`.
+- Generated the internal rollout packet at `data/local/command-center/fundz-slackbot-team-sequence.md`, `data/local/command-center/fundz-slackbot-team-sequence.json`, `data/local/command-center/fundz-slackbot-team-channels.csv`, and `assistant/fundz-slackbot-team-sequence.md`.
+- The packet defines six internal channels, Slackbot context prompts, FUNDz decision prompts, daily recap cadence, Jay/Lucy workorder checks, and owner-review boundaries.
+- Created the live Slack canvas at `https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC` and posted the kickoff in `#logic-briefing` at `https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279` after Brandon approved visible Slack setup.
+- Created and verified the six public Slack channels after Brandon approved channel setup: `#afs-daily-board` (`C0B35JETX8F`), `#fundz-ops` (`C0B4FB28QMN`), `#logic-disputes` (`C0B3NTMC49X`), `#lucy-billing` (`C0B3EMY7NJX`), `#jay-workorders` (`C0B3QMR1336`), and `#owner-review` (`C0B3HN18EDT`).
+- Added all 3 workspace members to each created channel.
+- Updated the generator outputs so channel IDs, Slack links, public/not-archived status, and member status persist in the local packet.
+- Safety boundary: Slackbot/Slack AI is internal-only for this rollout and cannot send client messages, approve dispute strategy, edit DF/AutoFox, change billing, wire webhooks, wake live pollers, or mark `Approved` rows as `Done`.
+- Verification passed: `make slackbot-team-sequence`; `python3 -m unittest tests.test_fundz_slackbot_team_sequence -q` ran 3 tests OK; `python3 -m py_compile scripts/fundz_slackbot_team_sequence.py` passed.
+- Slack channel lookup verified all six are `public_channel` and Not Archived; no live FUNDz runtime was woken and no client-facing action occurred.
+
+### Command Center Broad Autonomous Rollout Gate
+
+- Added a generated `Broad Autonomous Rollout Gate` to `scripts/fundz_command_center.py`.
+- New output: `data/local/command-center/fundz-broad-autonomous-rollout-gate.md`, linked from the main generated Command Center.
+- The gate keeps broad autonomous mode disabled and sets the current cap to 0 broad autonomous replies.
+- The next controlled cap is exactly 1 named client, 1 app/portal inbound, 1 exact approved reply, and 1 receipt.
+- Added first-client proof requirements, expansion rules, exclusions, runtime wake proof, rollback/park command (`make inactive`), kill-switch/env reset steps, and remaining blockers for broad mode.
+- Added command-center regression coverage so generated outputs keep the broad-mode blocker visible.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 59 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- Closeout verification also passed: focused runtime/team/inbox/command-center tests ran 97 tests OK; `make test` ran 255 tests OK; `sh scripts/check-memory.sh` passed.
+- No live reply, live poller, bridge, webhook/tunnel wake, DF/AutoFox edit, campaign assignment, billing edit, browser action, client contact, Supabase write, or broad-mode enablement was performed.
+
+### Runtime Wake Proof Checklist
+
+- Inspected Makefile, README runtime docs, bridge/tunnel/poller wake scripts, inactive script, webhook probe, and the Command Center live reply gate without waking live runtime or sending anything.
+- Added `scripts/fundz_runtime_wake_checklist.py` and `make runtime-wake-checklist`.
+- The checklist writes `data/local/command-center/fundz-runtime-wake-proof-checklist.md` and `.json` with local screen/process posture, kill-switch state, dry-run/live approval flags, proof receipt paths, approval packet requirements, pre-wake steps, post-approval health proof steps, receipt checks, and rollback/park steps.
+- Updated README and the Command Center live reply gate so operators run the no-wake checklist before any approved customer-service reply.
+- Latest generated status is `BLOCKED_REVIEW_RUNTIME`: no live bridge/tunnel/poller screen or process was detected, only allowed command-center reporting is awake, but `CREDIT_TRACKER_DRY_RUN=false` and the kill switch is off locally.
+- Verification passed: `python3 -m py_compile scripts/fundz_runtime_wake_checklist.py scripts/fundz_command_center.py`; `python3 -m unittest tests.test_fundz_runtime_wake_checklist tests.test_fundz_command_center -q` ran 63 tests OK; `make command-center` passed. `make runtime-wake-checklist` generated the proof surface and exited 2 by design because it found the dry-run blocker.
+- No bridge, tunnel, poller, webhook, webhook probe, network health check, client reply, client/lead send, DF/AutoFox edit, billing edit, campaign action, browser action, or Supabase write was performed.
+
+### One-Client App/Portal Source Proof Process
+
+- Inspected the HighLevel manual import guide, app/portal proof JSONL/Markdown outputs, manual inbox workaround outputs, current receipts, README, inbox poller code, and inbox tests.
+- Made the one-client fresh app/portal proof process concrete in README and the ignored manual-import guide: required export fields, receipt target, pass/fail states, and the exact controlled-live eligibility boundary.
+- Added a regression test proving a manual import can pass app/portal proof from `channel=Mobile App SMS` and `source=disputefox-admin-all-messages` even when `lastMessageType=SMS`, and still sends nothing.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 31 tests OK; `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed.
+- No live API call, live poller, browser action, send, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, Supabase write, or runtime wake was performed.
+
+### Broad Autonomous Customer-Service Supervisor Packet
+
+- Prepared `data/local/command-center/fundz-broad-autonomous-customer-service-supervisor-packet-2026-05-13.md` without waking live runtime or sending anything.
+- The packet consolidates the rollout approval packet, controlled-live scope/cap, runtime wake checklist, first-client proof runbook, one-reply receipt gate, expansion rules, and proof artifacts to update.
+- Supervisor decision: controlled-live is ready only for one named owner-approved non-sensitive app/portal reply with exact copy and receipt capture; broad autonomous third-party customer service remains blocked.
+- Broad mode still requires a fresh third-party app/portal inbound, repeatable API/webhook/manual-import source evidence, one approved reply receipt, current health, kill-switch/send-gate verification, and a separate Brandon-approved expansion cap.
+- No live reply, live HighLevel poller, bridge, webhook, tunnel, DF/AutoFox edit, billing edit, campaign assignment, or client-send runtime was enabled.
+
+### Runtime / Webhook Readiness
+
+- Inspected the Credit Tracker bridge, HighLevel inbox poller, autonomy daemon/operator, Makefile targets, send gate, and kill switch without waking live runtime or sending anything.
+- Found and fixed a code-level gate gap: the command-center kill switch was not enforced in the bridge `send_reply()` path, and non-test webhook replies did not require an action-time controlled approval flag.
+- Updated `scripts/fundz_credit_tracker_bridge.py` so live outbound replies check `data/local/command-center/fundz-send-kill-switch.json` / env kill switches before sending.
+- Added `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true` as the explicit gate for non-test webhook replies; otherwise the webhook holds the reply instead of sending.
+- Added regression tests in `tests/test_fundz_autonomy.py`.
+- Verification passed: `python3 -m unittest tests.test_fundz_autonomy tests.test_fundz_highlevel_inbox_poller tests.test_fundz_autonomous_operator -q` ran 53 tests OK; `python3 -m py_compile scripts/fundz_credit_tracker_bridge.py scripts/fundz_highlevel_inbox_poller.py scripts/fundz_autonomous_operator.py scripts/fundz_autonomy_daemon.py` passed.
+- No live bridge, poller, tunnel, webhook wiring, client reply, lead/client send, DF/AutoFox edit, campaign assignment, billing edit, browser action, or Supabase write was performed.
+
+### Source Mapping / Proof Receipt Documentation
+
+- Inspected the current HighLevel/app-portal proof outputs, manual inbox workaround outputs, README/manual docs, HighLevel inbox poller, and inbox poller tests.
+- Confirmed the current manual/import proof path has a no-send receipt: Brandon Jordan's DF `All Messages` `App Message` row appears in `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` with `source=disputefox-admin-all-messages` and `proof_status=captured_from_manual_import_no_send`.
+- Tightened README and the ignored manual-import guide so browser screenshots graduate to repeatable API/manual/import proof only when the copied/exported row preserves message type, source/channel, identity/timeline fields, and writes the no-send proof receipt.
+- Verification: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` passed 30 tests on rerun.
+- No live API call, live poller, browser action, send, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, or Supabase write was performed.
+
+### Controlled Live Customer-Service Reply Gate
+
+- Added a deterministic controlled-live gate to `scripts/fundz_highlevel_inbox_poller.py`.
+- Live HighLevel replies now require dry-run off, `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true`, command-center kill switch off, business-hours window or explicit after-hours override, app/portal proof signal, no sensitive/proof-dependent classification labels, and reply receipt logging.
+- Webhook-driven live replies now require `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true` and check the command-center kill switch before outbound send.
+- Plain SMS is held even when live flags are on; the live path is limited to one approved, non-sensitive app/portal reply at a time.
+- Sensitive/proof-dependent labels still hold: billing, cancellation, complaint, document request, app access, score concern, and dispute update.
+- Updated README and the generated Command Center to show the Customer-Service Live Reply Gate clearly.
+- Added proof receipt `data/local/command-center/fundz-controlled-live-reply-gate-closeout-2026-05-13.md`.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 30 tests OK; `python3 -m unittest tests.test_fundz_command_center -q` ran 58 tests OK; focused combined gate tests ran 111 tests OK; `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py scripts/fundz_command_center.py scripts/fundz_credit_tracker_bridge.py scripts/fundz_autonomous_operator.py` passed; `make command-center` passed; `sh scripts/check-memory.sh` passed; `make test` ran 246 tests OK.
+- No live reply, live HighLevel poller, bridge, webhook, tunnel, DF/AutoFox edit, billing edit, campaign assignment, or client-send runtime was enabled.
+
+### Command Center Customer-Service Readiness Truth
+
+- Updated the generated A FUND Solution Command Center so customer-service readiness is visible near the top of `data/local/command-center/fundz-command-center.md`.
+- Added a structured `customer_service_readiness` section to `scripts/fundz_command_center.py` with three plain buckets: `Safe Now`, `Controlled-Live Eligible`, and `Broad Autonomous Replies Still Blocked`.
+- The generated report now states that safe work is local prep/proof capture/review only; controlled live is limited to one named owner-approved app/portal reply with exact channel/copy/receipt; broad autonomous third-party replies remain blocked.
+- The readiness block links the current proof surfaces: readiness packet, production routing proof, client-side app proof, manual/API app-portal proof JSONL, and Brandon owner-side roundtrip receipts.
+- Added focused command-center test assertions so the Markdown includes the readiness section and keeps the broad-autonomous-replies blocker visible.
+- Regenerated `make command-center`; the current generated report shows owner-side app/portal roundtrip proven, manual/API app-portal proof events present, and broad autonomous replies blocked.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 58 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No live reply, client send, HighLevel live poller, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, browser action, or Supabase write was performed.
+
+### Supervisor Live AutoFox Tip 04 Completion
+
+- Completed the controlled live DF/Pulse template setup for `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Saved `Step 9 - Credit Tip 04 - Statement Dates (24 Days)` with `Delay / Days / 24`, Mobile App SMS action `Credit Tip 04 - Statement Dates Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 04 Step 9`.
+- Verified the Step 9 row showed `Mobile App SMS`, `Note Created`, and `Details`, with status `In Progress / Active`.
+- Added live proof receipt `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md`.
+- Updated generated command-center wording so Credit Tip 04 is no longer listed as the pending target; the next gated AutoFox target is Tip 05 only if Brandon approves another DF template edit.
+- Safety boundary held: no campaign assignment, no manual client send, no regular SMS removal, no broad `Update Data Fields`, and no Tip 05+ work.
+
+### Agent C Approved-Row Collapse
+
+- Inspected `data/local/command-center/fundz-work-queue.csv`, `data/local/command-center/fundz-command-center.md` Queue Truth, `data/local/command-center/task-completion-audit-2026-05-12.md`, `data/local/maintenance-cleanup/fundz-billing-revenue-proof-map-2026-05-13.md` / `.csv`, send ledger, archive trail, and proof evidence paths.
+- Added a deterministic command-center generator rule that only collapses Approved rows when the billing/revenue proof map names the client and gives a concrete local proof outcome.
+- Result after `make command-center`: 16 rows collapsed out of the 141 Approved rows; 15 unresolved billing/payment rows are now `Blocked`, and Victoria Robinson is `Done` from the authenticated DF archive receipt.
+- Current Queue Truth: 225 total rows, 125 Approved, 37 Needs Brandon, 46 Done, 1 Sent, 16 Blocked, 0 Failed, 0 Proof Needed, 0 Hold.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 58 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No live send, reminder send, billing edit, DF/AutoFox edit/archive, campaign assignment, HighLevel live action, browser action, webhook wiring, Supabase write, or payment-ledger cash row was performed/added.
+
+### Agent B Billing / Payment Proof Closer
+
+- Rechecked the Lucy billing proof map, payment-proof ledger, ScoreFusion reminder receipt, send ledger, archive trail, owner billing updates, and local receipt files without live actions.
+- Found additional local proof for Victoria Robinson: `data/local/semi-autonomous/receipts/df-archive-arthur-victoria-exact-2026-05-12T10-58-49-357Z.json` shows the May 12 DF archive response succeeded and Victoria moved from active to archived.
+- Updated `data/local/maintenance-cleanup/fundz-billing-revenue-proof-map-2026-05-13.md` and `.csv` so Victoria is archive-closed locally instead of live-archive-gated.
+- Current counts: 16 proof-map rows, 7 reminder-send-proof rows, 1 archive-proof row, 15 still-billing-issue rows, 0 rows needing live DF archive receipt, and 0 payment-proof ledger receipt rows.
+- Did not update the payment ledger because the proof found was archive proof, not payment or revenue proof.
+- No reminder send, billing edit, DF/AutoFox archive/edit, campaign assignment, client reply, HighLevel live action, browser action, Supabase write, or payment-ledger cash row was performed/added.
+
+### Agent D Customer-Service App/Portal API + Manual Proof Path
+
+- Inspected `scripts/fundz_highlevel_inbox_poller.py`, app/portal proof receipts, manual import docs, and current handoff/status/next-step files.
+- Fixed the API/manual-import app/portal proof path so plain HighLevel/manual rows are no longer force-labeled as `credit-tracker` channel proof; app/portal proof now requires real message type, channel/source, or app-access language.
+- Added regression tests proving plain SMS/manual rows such as `What happened?` do not write app/portal proof, while `App Message` rows still do.
+- Updated the manual workaround wording to cover HighLevel, DF, or Credit Tracker admin exports/copies when the app/portal event is not exposed by the HighLevel API.
+- Added a local manual-import copy of the existing Brandon Jordan DF `All Messages` App Message receipt and ran `make highlevel-inbox-workaround`; it wrote one no-send proof row to `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` and `.md`.
+- Captured proof row: Brandon Jordan, inbound `App_Message`, message `hey`, source `disputefox-admin-all-messages`, proof status `captured_from_manual_import_no_send`.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 24 tests OK; `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed; `make highlevel-inbox-workaround` imported 1 row, wrote 1 proof event, and sent 0.
+- No live reply, client send, HighLevel live poller, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, browser action, or Supabase write was performed.
+
+### Agent A AutoFox Tip 04 Executor/Preflight
+
+- Inspected the sleep-mode gate, current memory handoff/status/next steps, Tip 04 packet, prior Tip 01-03 proof receipts, command-center generator, and focused tests.
+- Confirmed the exact safe live action remains Tip 04 only: create `Step 9 - Credit Tip 04 - Statement Dates (24 Days)` in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`) with `Delay / Days / 24`, Mobile App SMS action `Credit Tip 04 - Statement Dates Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 04 Step 9`.
+- Added local operator preflight/checklist `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-operator-preflight-20260513.md`; it includes the pre-live checklist, exact Mobile App SMS copy, exact internal note marker, and final proof receipt template.
+- Updated `scripts/fundz_command_center.py` so the generated `fundz-autofox-member-experience-system.md` points to the operator preflight/checklist, and added a focused test assertion.
+- Regenerated `make command-center`.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 56 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No browser was opened, no DF/Pulse edit was performed, no campaign was assigned, no manual client send happened, no broad `Update Data Fields` action was used, and no Tip 05+ expansion happened.
+- Blocker: live execution still requires Brandon's exact action-time approval plus an available logged-in DF/Pulse browser.
+
+### Agent 3 Billing / Revenue Proof Map
+
+- Reviewed the Lucy-owned billing workqueue, decision batch, billing maintenance focus, owner billing status updates, payment-proof ledger, send ledger, archive receipt trail, and May 12 ScoreFusion billing reminder receipt.
+- Added `data/local/maintenance-cleanup/fundz-billing-revenue-proof-map-2026-05-13.md` and `.csv`.
+- Confirmed 16 Lucy rows, 16/16 local decisions complete, 7 duplicate-review clients collapsed to one client-level issue, and 7 Lucy rows with reminder-send proof that should not be reopened as unsent reminder work.
+- Confirmed 15 Lucy rows still need payment or billing-system clearance, Victoria Robinson still needs live DF archive preflight/receipt, and the payment-proof ledger has 0 receipt rows.
+- Verification passed: CSV validation showed 16 proof-map rows, 7 reminder-closed rows, 1 archive-gated row, and 0 payment-ledger data rows; `sh scripts/check-memory.sh` passed.
+- No reminder send, billing edit, DF/AutoFox archive/edit, campaign assignment, client reply, HighLevel live action, or Supabase write was performed.
+
+### Agent 4 Command-Center Truth Refresh
+
+- Regenerated local command-center outputs with `make command-center`.
+- Added a generated `Queue Truth` block to `data/local/command-center/fundz-command-center.md` through `scripts/fundz_command_center.py`.
+- The refreshed board now spells out that `Approved` is prepared but gated, not done; `Done/Sent` is receipt-backed; `Needs Brandon` is decision/hold; and `Blocked/Failed/Proof Needed` requires cleanup before closeout.
+- Current queue counts: 224 rows total; 141 Approved, 37 Needs Brandon, 45 Done, 1 Sent, 0 Hold, 0 Blocked, 0 Failed, 0 Proof Needed.
+- Current send gate: 0 next-send rows and 0 allowed now.
+- Current missing-steps recheck: 7 pass and 3 review; Supabase command-line sync is pass from local `.env.local` configuration.
+- Verification: `python3 -m unittest tests.test_fundz_command_center -q` passed 56 tests; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No live runtime, sends, browser actions, DF/AutoFox edits, HighLevel live actions, webhook wiring, billing edits, or Supabase writes were performed.
+
+### Agent 2 AutoFox Tip 04 Review Packet
+
+- Tightened the local AutoFox credit-tip planning surfaces only.
+- Added a generator-backed `Next Controlled Tip 04 Review Packet` to `data/local/command-center/fundz-autofox-member-experience-system.md`.
+- The packet now names the exact next controlled live step if Brandon approves DF work: `Step 9 - Credit Tip 04 - Statement Dates (24 Days)`, `Delay / Days / 24`, Mobile App SMS action `Credit Tip 04 - Statement Dates Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 04 Step 9`.
+- Added the exact Tip 04 app message body, internal note marker body, receipt target, and no-send/no-assignment review gates.
+- Tightened `data/local/command-center/fundz-autofox-mobile-app-migration-checklist.md` so Tip 04 is the only next controlled target and Tips 05-20 remain future one-at-a-time work after Tip 04 proof.
+- Added focused command-center test assertions for the Tip 04 review packet.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q`, `python3 -m py_compile scripts/fundz_command_center.py`, and `make command-center`.
+- No browser was opened, no DF/Pulse edit was performed, no campaign was assigned, no client send happened, and no live action was taken.
+
+### Agent 5 Parking / Scheduler Safety Audit
+
+- Verified safe parking without waking live bridge, poller, webhook, browser, or client-send runtime.
+- Confirmed `screen -ls` shows only the local `fundz-command-center` reporting server, with no `fundz-bridge`, `fundz-tunnel`, or `fundz-highlevel-poller` sessions.
+- Confirmed `launchctl print-disabled gui/$(id -u)` shows `com.afundsolution.fundz-autonomous-operator` enabled and `com.afundsolution.fundz-imessage-fallback` disabled.
+- Confirmed the autonomous LaunchAgent is not running, has `StartInterval=604800`, `RunAtLoad=false`, and keeps `CREDIT_TRACKER_DRY_RUN=true`, `FUNDZ_HIGHLEVEL_POLLER_LIVE=false`, and `FUNDZ_ALLOW_AFTER_HOURS_SENDS=false`.
+- Confirmed the iMessage fallback service is unloaded/disabled even though its plist still exists.
+- Updated `FUNDZ_SLEEP_MODE.md`, `README.md`, and `memory/NEXT_STEPS.md` to remove stale "owner commands awake / keep fallback enabled" instructions; fallback should stay parked unless Brandon reconfirms.
+- Verification passed: dry runtime check with current safe-mode allowances returned no safety findings; `python3 -m unittest tests.test_fundz_autonomous_operator -q` passed 6 tests; `sh -n scripts/fundz_inactive.sh` passed; `sh scripts/check-memory.sh` passed; `make test` passed 230 tests.
+- No live client reply, client send, bridge wake, HighLevel live poller, DF/AutoFox edit, campaign assignment, webhook wiring, billing edit, or Supabase write was performed.
+
+### App/Portal Proof Mapping Hardening
+
+- Tightened `scripts/fundz_highlevel_inbox_poller.py` so app/portal proof matching uses whole-word/phrase checks instead of substring checks.
+- Fixed a false positive where a plain SMS score concern like `What happened?` could be classified as `app_access` and written to `data/local/highlevel-inbox-poller/app-portal-event-proof.*` because `app` appears inside `happened`.
+- Added focused tests for whole-word app-access classification, whole-word app/portal signal detection, and score-concern live holds not writing app/portal proof.
+- Updated `README.md` and `data/local/highlevel-inbox-manual-imports/_README.md` with recommended manual app/portal proof headers.
+- Cleaned the prior false local proof row from `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` and reset the readable proof summary to 0 captured events until a real app/portal row appears.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 22 tests OK, and `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed.
+- No live send, HighLevel live reply, DF/AutoFox edit, campaign assignment, billing edit, browser action, webhook wiring, or Supabase write was performed.
+
 ### Supabase Command-Line Sync Unblocked
 
 - Saved the validated Supabase Postgres connection string to local `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` without printing or committing the secret.

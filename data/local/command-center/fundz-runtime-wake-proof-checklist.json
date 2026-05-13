@@ -1,0 +1,85 @@
+{
+  "approval_packet_required": [
+    "Named client and exact inbound app/portal source.",
+    "Exact reply copy or exact approved reply category.",
+    "Exact action window and route: HighLevel poller or Credit Tracker webhook.",
+    "Cap of one reply unless Brandon approves a different cap in writing.",
+    "Receipt owner and rollback owner named before wake."
+  ],
+  "blockers": [
+    "CREDIT_TRACKER_DRY_RUN is false outside this no-wake checklist run."
+  ],
+  "env_gates": {
+    "allow_after_hours_sends": false,
+    "credit_tracker_dry_run": false,
+    "highlevel_controlled_reply_approved": false,
+    "highlevel_poller_live": false,
+    "webhook_controlled_reply_approved": false
+  },
+  "generated_at": "2026-05-13 10:28:34 CDT",
+  "kill_switch": {
+    "enabled": false,
+    "exists": true,
+    "path": "data/local/command-center/fundz-send-kill-switch.json",
+    "reason": "Default off; approval gates still apply.",
+    "status": "off_approval_gates_still_required"
+  },
+  "no_wake_performed": true,
+  "not_authorized_by_this_checklist": [
+    "No live reply.",
+    "No client/lead send.",
+    "No webhook wiring.",
+    "No HighLevel, billing, DF, AutoFox, campaign, or archive edit."
+  ],
+  "pre_wake_local_steps": [
+    "Run `make inactive` if any live bridge/tunnel/poller runtime is awake.",
+    "Run `make runtime-wake-checklist` and confirm status is READY_FOR_APPROVED_WAKE_PROOF or READY_FOR_APPROVED_WAKE_PROOF_REPORTING_AWAKE.",
+    "Confirm app/portal inbound proof exists or is the exact inbound being tested.",
+    "Confirm the command-center kill switch is on while waiting, then turn it off only for the approved action window."
+  ],
+  "proof_files": {
+    "app_portal_proof": {
+      "bytes": 1657,
+      "exists": true,
+      "modified_at": "2026-05-13 10:14:51 CDT",
+      "path": "data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl"
+    },
+    "bridge_log": {
+      "bytes": 243229,
+      "exists": true,
+      "modified_at": "2026-05-13 10:28:20 CDT",
+      "path": "logs/credit-tracker-bridge.jsonl"
+    },
+    "reply_receipts": {
+      "bytes": 983,
+      "exists": true,
+      "modified_at": "2026-05-06 19:41:09 CDT",
+      "path": "data/local/highlevel-inbox-poller/reply-receipts.jsonl"
+    }
+  },
+  "runtime": {
+    "active_screens": [
+      "fundz-command-center"
+    ],
+    "allowed_reporting_screens": [
+      "fundz-command-center"
+    ],
+    "live_processes": [],
+    "live_screens": []
+  },
+  "send_performed": false,
+  "status": "BLOCKED_REVIEW_RUNTIME",
+  "wake_proof_steps_after_approval": [
+    "Wake only the approved route: `scripts/fundz_highlevel_poller_start.sh` for poller or bridge plus `scripts/fundz_named_tunnel_setup.sh` for webhook.",
+    "Verify local bridge health if webhook route is used: `curl -fsS http://127.0.0.1:8787/health`.",
+    "Verify public webhook health if tunnel route is used: `curl -fsS https://fundz.afundsolution.com/health`.",
+    "Run `make webhook-probe` only for webhook route; it is test-only and must not send.",
+    "Run HighLevel preview before live poller reply: `CREDIT_TRACKER_DRY_RUN=true FUNDZ_HIGHLEVEL_POLLER_LIVE=false scripts/fundz_highlevel_inbox_poller.py --once --limit 5`.",
+    "Confirm exactly one approval flag is true for the approved route and `CREDIT_TRACKER_DRY_RUN=false` only inside the window.",
+    "After the approved reply, confirm receipt in `data/local/highlevel-inbox-poller/reply-receipts.jsonl` or `logs/credit-tracker-bridge.jsonl`.",
+    "Run `make inactive`, restore dry-run, restore approval flags to false, and regenerate `make runtime-wake-checklist` plus `make command-center`."
+  ],
+  "warnings": [
+    "Command-center kill switch is off. That is only acceptable inside an approved action window."
+  ]
+}

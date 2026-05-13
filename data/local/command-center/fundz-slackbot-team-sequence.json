@@ -1,0 +1,201 @@
+{
+  "business_plus_fit": [
+    "Conversation and thread summaries for daily catch-up.",
+    "AI search answers with citations for prior decisions and proof links.",
+    "Recaps for muted monitoring channels.",
+    "File summaries for PDFs, spreadsheets, SOPs, and reports shared in Slack.",
+    "Workflow automation and canvas generation for checklists and handoffs.",
+    "Slackbot for limited weekly personal assistant prompts where the workspace plan allows it."
+  ],
+  "channels": [
+    {
+      "channel": "#afs-daily-board",
+      "fundz_logic_boundary": "FUNDz/LOGIC decide meaning, proof status, and next action; Slackbot only organizes the board.",
+      "member_status": "all_3_workspace_members_added",
+      "owner": "Brandon",
+      "purpose": "One plain-language morning board for what matters now across FUNDz, LOGIC, Lucy, and Jay.",
+      "recap_setting": "Daily recap on; mute allowed after recap is configured.",
+      "slack_ai_use": "Recap yesterday, summarize today's thread, and turn the board into a short owner brief.",
+      "slack_channel_id": "C0B35JETX8F",
+      "slack_status": "created_public_not_archived",
+      "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B35JETX8F",
+      "source_files": "data/local/command-center/fundz-daily-board.md;data/local/command-center/fundz-today-operating-board.md"
+    },
+    {
+      "channel": "#fundz-ops",
+      "fundz_logic_boundary": "No live bridge, poller, webhook, client reply, campaign, DF/AutoFox edit, or billing edit from Slackbot.",
+      "member_status": "all_3_workspace_members_added",
+      "owner": "FUNDz",
+      "purpose": "Internal FUNDz operations, safe local autonomy status, customer-service readiness, and blocked work.",
+      "recap_setting": "Daily recap on; use summaries for long implementation threads.",
+      "slack_ai_use": "Find blockers, summarize proof threads, explain technical status in plain language.",
+      "slack_channel_id": "C0B4FB28QMN",
+      "slack_status": "created_public_not_archived",
+      "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B4FB28QMN",
+      "source_files": "data/local/command-center/fundz-command-center.md;data/local/command-center/fundz-send-visibility-command-center.md;data/local/command-center/fundz-send-gate-lock.md"
+    },
+    {
+      "channel": "#logic-disputes",
+      "fundz_logic_boundary": "LOGIC interprets dispute meaning and review gates; Slackbot does not approve letters or strategy.",
+      "member_status": "all_3_workspace_members_added",
+      "owner": "LOGIC",
+      "purpose": "Dispute operations, letter context, bureau response questions, and old-letter lookup requests.",
+      "recap_setting": "Daily recap on for leadership; thread summaries for each member issue.",
+      "slack_ai_use": "Search Slack for old context and prepare source packets for LOGIC.",
+      "slack_channel_id": "C0B3NTMC49X",
+      "slack_status": "created_public_not_archived",
+      "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B3NTMC49X",
+      "source_files": "LOGIC Slackbot tag-team protocol; Slack message/file sources"
+    },
+    {
+      "channel": "#lucy-billing",
+      "fundz_logic_boundary": "No payment called collected without receipt-level proof; no billing edits from Slackbot.",
+      "member_status": "all_3_workspace_members_added",
+      "owner": "Lucy",
+      "purpose": "Billing maintenance, payment proof, archive proof, and owner billing decisions.",
+      "recap_setting": "Daily recap on; only unresolved proof-backed rows stay active.",
+      "slack_ai_use": "Turn billing rows into a checklist and remind Lucy which proof is still missing.",
+      "slack_channel_id": "C0B3EMY7NJX",
+      "slack_status": "created_public_not_archived",
+      "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B3EMY7NJX",
+      "source_files": "data/local/maintenance-cleanup/fundz-lucy-billing-workqueue.md"
+    },
+    {
+      "channel": "#jay-workorders",
+      "fundz_logic_boundary": "A summary is not proof; workorders close only with evidence or explicit blocker outcome.",
+      "member_status": "all_3_workspace_members_added",
+      "owner": "Jay",
+      "purpose": "End-of-day workorder closeout and carried-forward tasks.",
+      "recap_setting": "Recap on; huddle notes on if the team meets.",
+      "slack_ai_use": "Validate owner, due date, status, evidence, next step, and blocker language before closeout.",
+      "slack_channel_id": "C0B3QMR1336",
+      "slack_status": "created_public_not_archived",
+      "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B3QMR1336",
+      "source_files": "assistant/jay-lucy-daily-workorder-sop.md"
+    },
+    {
+      "channel": "#owner-review",
+      "fundz_logic_boundary": "Approved is a gated queue state, not done; no sends or live changes without action-time approval.",
+      "member_status": "all_3_workspace_members_added",
+      "owner": "Brandon",
+      "purpose": "Only the decisions Brandon must make: approvals, blockers, proof gaps, and send gates.",
+      "recap_setting": "Daily recap on; keep noise low.",
+      "slack_ai_use": "Summarize open decisions and locate proof links before asking Brandon.",
+      "slack_channel_id": "C0B3HN18EDT",
+      "slack_status": "created_public_not_archived",
+      "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B3HN18EDT",
+      "source_files": "data/local/command-center/fundz-owner-review-packet.md;data/local/command-center/fundz-governor-alerts.csv"
+    }
+  ],
+  "current_fundz_context": {
+    "blocking_or_decision_rows": 53,
+    "daily_board_preview": [
+      "# A FUND Solution Daily Board",
+      "Generated: 2026-05-13T10:28:14-0500",
+      "Today\u2019s Objective: Clean client records and maintenance queues before any live work.",
+      "Next Action: Do not resend from this local task; wait for payment proof, ScoreFusion clearance, or approved follow-up receipt.",
+      "Blocked: No current blocker recorded.",
+      "Needs Brandon: 37 queue item(s) need Brandon/hold review."
+    ],
+    "send_gate_preview": [
+      "# A FUND Solution Send Visibility Board",
+      "Generated: 2026-05-13T10:28:14-0500",
+      "## Kill Switch",
+      "- Status: ready_but_gated",
+      "- Enabled: False",
+      "- Reason: Default off; approval gates still apply.",
+      "- Control: data/local/command-center/fundz-send-kill-switch.md",
+      "## Sent Ledger"
+    ],
+    "status_counts": {
+      "Approved": 125,
+      "Blocked": 16,
+      "Done": 46,
+      "Needs Brandon": 37,
+      "Sent": 1
+    },
+    "today_board_preview": [
+      "# FUNDz Today Operating Board",
+      "Generated: 2026-05-13T10:28:14-0500",
+      "Objective: operate the queue from one surface today. Do not keep re-proving the same safety state unless this board goes stale or a live action is requested.",
+      "## Safety Gate Tile",
+      "- State: Local reporting safe",
+      "- Last check: 2026-05-08T19:23:33-0500"
+    ],
+    "work_queue_rows": 225
+  },
+  "daily_sequence": [
+    {
+      "action": "Post or refresh the daily board in #afs-daily-board, then let Slack AI recap it.",
+      "output": "What matters now, blockers, Needs Brandon, safe local work, and proof gaps.",
+      "owner": "Brandon or operator on duty",
+      "time": "Morning"
+    },
+    {
+      "action": "Use Slackbot search/summaries to locate missing proof and stale decisions.",
+      "output": "Short context packets for FUNDz, LOGIC, Lucy, or Jay.",
+      "owner": "FUNDz",
+      "time": "Midday"
+    },
+    {
+      "action": "Submit /workorder and run the Slackbot workorder check prompt before closeout.",
+      "output": "Every item has status, owner, next step, evidence, and blocker language when needed.",
+      "owner": "Jay/Lucy",
+      "time": "End of day"
+    },
+    {
+      "action": "Confirm Slack summaries match proof files before marking anything Done or Sent.",
+      "output": "Receipt-backed closeout or clear carry-forward blocker.",
+      "owner": "FUNDz/LOGIC",
+      "time": "Before closeout"
+    }
+  ],
+  "generated_at": "2026-05-13T11:33:48-05:00",
+  "live_slack_setup": {
+    "canvas_url": "https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC",
+    "channel_count": 6,
+    "channel_creation_status": "created_public_channels_verified",
+    "connector_limit": "The Slack connector can verify channels, create canvases, and post messages; live channel creation was completed through Slack web UI.",
+    "kickoff_channel": "#logic-briefing",
+    "kickoff_message_url": "https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279",
+    "member_status": "All 3 workspace members were added to each created channel.",
+    "verification": "Verified by Slack channel lookup on 2026-05-13: all six channels are public_channel and Not Archived."
+  },
+  "mission": "Use Slackbot and Slack AI as the internal team memory, recap, search, reminder, and canvas layer.",
+  "prompt_templates": {
+    "daily_board_prompt": "Summarize today's A FUND Solution board in plain language for the team.\n\nUse only posted source files or channel messages. Return:\n1. What matters now\n2. Blocked\n3. Needs Brandon\n4. Safe local work\n5. Proof needed before anything is called done",
+    "fundz_decision_prompt": "Use this Slackbot context packet and tell us the next FUNDz operations step.\n\nClient/member:\nContext summary:\nMessage/file links:\nMissing facts:\nQuestion:\n\nReturn:\n1. What this means\n2. Next action\n3. Owner\n4. Proof needed before closeout\n5. Whether this needs Lucy, Jay, LOGIC, or Brandon approval",
+    "slackbot_context_packet": "Search Slack for context the operations team can use. Summarize facts only.\n\nTopic/client:\nDate range:\nChannels or people to check:\nFiles/canvases to include:\n\nReturn:\n1. What you found\n2. Message/file links\n3. What is missing or uncertain\n4. Exact question for FUNDz or LOGIC\n5. Reminder/follow-up Slackbot should track\n\nDo not approve sends, change client strategy, edit billing, or treat summaries as proof.",
+    "workorder_check_prompt": "Check this /workorder before closeout. Flag missing status, owner, due date, next step, evidence, privacy issues, and any item marked done without proof. Do not rewrite client-facing copy."
+  },
+  "role_split": {
+    "fundz_logic": "Interprets operational meaning, checks proof, sets next action, preserves approval gates, and closes work only with evidence.",
+    "slackbot": "Finds, summarizes, cites, reminds, explains, drafts internal canvases, and prepares context packets."
+  },
+  "rollout_steps": [
+    "Use the six live internal Slack channels and pin this sequence packet plus relevant source files/canvases in each channel.",
+    "Turn on recaps for #afs-daily-board, #fundz-ops, #logic-disputes, #lucy-billing, and #owner-review.",
+    "Use the shared Slackbot context-packet prompt for searches and summaries.",
+    "Use FUNDz/LOGIC prompts for decisions, proof status, and next actions.",
+    "After one week, compare workorder completion, open blockers, and proof gaps before expanding workflows."
+  ],
+  "safety_rules": [
+    "Slackbot is internal-only for this rollout.",
+    "Slackbot can summarize, search, explain, remind, draft internal canvases, and organize proof links.",
+    "Slackbot cannot send client messages, approve dispute strategy, edit DF/AutoFox, change billing, wire webhooks, wake live pollers, or mark Approved rows as Done.",
+    "Approved means prepared but gated until receipt-backed proof or explicit blocker outcome exists.",
+    "Any live client-facing step still needs Brandon's exact action-time approval and the existing FUNDz send gates.",
+    "No full SSNs, full DOBs, full account numbers, passwords, secrets, or private personal data should be placed in shared Slack channels."
+  ],
+  "source_files": [
+    "data/local/command-center/fundz-daily-board.md",
+    "data/local/command-center/fundz-today-operating-board.md",
+    "data/local/command-center/fundz-command-center.md",
+    "data/local/command-center/fundz-owner-review-packet.md",
+    "data/local/command-center/fundz-governor-alerts.csv",
+    "data/local/command-center/fundz-send-visibility-command-center.md",
+    "data/local/command-center/fundz-send-gate-lock.md",
+    "assistant/jay-lucy-daily-workorder-sop.md",
+    "data/local/maintenance-cleanup/fundz-lucy-billing-workqueue.md"
+  ]
+}
