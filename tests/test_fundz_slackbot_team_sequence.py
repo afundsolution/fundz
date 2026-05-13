@@ -55,6 +55,8 @@ class FundzSlackbotTeamSequenceTests(unittest.TestCase):
         self.assertEqual(report["current_fundz_context"]["work_queue_rows"], 4)
         self.assertEqual(report["current_fundz_context"]["blocking_or_decision_rows"], 2)
         self.assertIn("#afs-daily-board", {row["channel"] for row in report["channels"]})
+        self.assertEqual(report["live_slack_setup"]["channel_creation_status"], "created_public_channels_verified")
+        self.assertTrue(all(row["slack_channel_id"] for row in report["channels"]))
         self.assertTrue(any("cannot send client messages" in rule for rule in report["safety_rules"]))
 
     def test_prompt_templates_separate_slackbot_from_fundz_logic(self) -> None:
@@ -76,6 +78,10 @@ class FundzSlackbotTeamSequenceTests(unittest.TestCase):
             "channels": [
                 {
                     "channel": "#afs-daily-board",
+                    "slack_channel_id": "C0B35JETX8F",
+                    "slack_url": "https://app.slack.com/client/T0335UDK8AG/C0B35JETX8F",
+                    "slack_status": "created_public_not_archived",
+                    "member_status": "all_3_workspace_members_added",
                     "owner": "Brandon",
                     "purpose": "Daily board.",
                     "recap_setting": "Daily",
@@ -92,7 +98,17 @@ class FundzSlackbotTeamSequenceTests(unittest.TestCase):
                     "output": "Plain status.",
                 }
             ],
-            "rollout_steps": ["Create channels manually."],
+            "rollout_steps": ["Use live channels."],
+            "live_slack_setup": {
+                "canvas_url": "https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC",
+                "kickoff_message_url": "https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279",
+                "kickoff_channel": "#logic-briefing",
+                "channel_creation_status": "created_public_channels_verified",
+                "channel_count": 1,
+                "member_status": "All 3 workspace members were added to each created channel.",
+                "verification": "Verified by Slack channel lookup.",
+                "connector_limit": "Verified through Slack.",
+            },
             "prompt_templates": {"test_prompt": "Do the safe thing."},
             "safety_rules": ["Slackbot cannot send client messages."],
             "source_files": ["daily.md"],
@@ -112,6 +128,8 @@ class FundzSlackbotTeamSequenceTests(unittest.TestCase):
             self.assertTrue(paths["json"].exists())
             self.assertTrue(paths["channels"].exists())
             self.assertIn("Slackbot is the team librarian", markdown)
+            self.assertIn("created_public_channels_verified", markdown)
+            self.assertIn("C0B35JETX8F", markdown)
             self.assertIn("Slackbot cannot send client messages", markdown)
 
 

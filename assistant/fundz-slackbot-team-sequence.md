@@ -1,6 +1,6 @@
 # FUNDz Slackbot Team Sequence
 
-Generated: 2026-05-13T11:12:53-05:00
+Generated: 2026-05-13T11:33:48-05:00
 
 ## Mission
 
@@ -14,10 +14,14 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 - Blocking or decision rows: 53
 - Status counts: Approved=125, Blocked=16, Done=46, Needs Brandon=37, Sent=1
 
-## Channels To Create
+## Live Channels
 
 ### #afs-daily-board
 
+- Slack ID: C0B35JETX8F
+- Slack link: https://app.slack.com/client/T0335UDK8AG/C0B35JETX8F
+- Slack status: created_public_not_archived
+- Members: all_3_workspace_members_added
 - Owner: Brandon
 - Purpose: One plain-language morning board for what matters now across FUNDz, LOGIC, Lucy, and Jay.
 - Slack AI use: Recap yesterday, summarize today's thread, and turn the board into a short owner brief.
@@ -26,6 +30,10 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 
 ### #fundz-ops
 
+- Slack ID: C0B4FB28QMN
+- Slack link: https://app.slack.com/client/T0335UDK8AG/C0B4FB28QMN
+- Slack status: created_public_not_archived
+- Members: all_3_workspace_members_added
 - Owner: FUNDz
 - Purpose: Internal FUNDz operations, safe local autonomy status, customer-service readiness, and blocked work.
 - Slack AI use: Find blockers, summarize proof threads, explain technical status in plain language.
@@ -34,6 +42,10 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 
 ### #logic-disputes
 
+- Slack ID: C0B3NTMC49X
+- Slack link: https://app.slack.com/client/T0335UDK8AG/C0B3NTMC49X
+- Slack status: created_public_not_archived
+- Members: all_3_workspace_members_added
 - Owner: LOGIC
 - Purpose: Dispute operations, letter context, bureau response questions, and old-letter lookup requests.
 - Slack AI use: Search Slack for old context and prepare source packets for LOGIC.
@@ -42,6 +54,10 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 
 ### #lucy-billing
 
+- Slack ID: C0B3EMY7NJX
+- Slack link: https://app.slack.com/client/T0335UDK8AG/C0B3EMY7NJX
+- Slack status: created_public_not_archived
+- Members: all_3_workspace_members_added
 - Owner: Lucy
 - Purpose: Billing maintenance, payment proof, archive proof, and owner billing decisions.
 - Slack AI use: Turn billing rows into a checklist and remind Lucy which proof is still missing.
@@ -50,6 +66,10 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 
 ### #jay-workorders
 
+- Slack ID: C0B3QMR1336
+- Slack link: https://app.slack.com/client/T0335UDK8AG/C0B3QMR1336
+- Slack status: created_public_not_archived
+- Members: all_3_workspace_members_added
 - Owner: Jay
 - Purpose: End-of-day workorder closeout and carried-forward tasks.
 - Slack AI use: Validate owner, due date, status, evidence, next step, and blocker language before closeout.
@@ -58,6 +78,10 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 
 ### #owner-review
 
+- Slack ID: C0B3HN18EDT
+- Slack link: https://app.slack.com/client/T0335UDK8AG/C0B3HN18EDT
+- Slack status: created_public_not_archived
+- Members: all_3_workspace_members_added
 - Owner: Brandon
 - Purpose: Only the decisions Brandon must make: approvals, blockers, proof gaps, and send gates.
 - Slack AI use: Summarize open decisions and locate proof links before asking Brandon.
@@ -92,8 +116,7 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 
 ## Rollout Steps
 
-- Create the six internal channels manually in Slack.
-- Pin this sequence packet and the relevant source files/canvases in each channel.
+- Use the six live internal Slack channels and pin this sequence packet plus relevant source files/canvases in each channel.
 - Turn on recaps for #afs-daily-board, #fundz-ops, #logic-disputes, #lucy-billing, and #owner-review.
 - Use the shared Slackbot context-packet prompt for searches and summaries.
 - Use FUNDz/LOGIC prompts for decisions, proof status, and next actions.
@@ -104,8 +127,11 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 - Canvas: https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC
 - Kickoff message: https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279
 - Kickoff channel: #logic-briefing
-- Channel creation status: manual_admin_required
-- Connector limit: The available Slack connector can create canvases and post messages, but it cannot create channels.
+- Channel creation status: created_public_channels_verified
+- Channel count: 6
+- Members: All 3 workspace members were added to each created channel.
+- Verification: Verified by Slack channel lookup on 2026-05-13: all six channels are public_channel and Not Archived.
+- Connector limit: The Slack connector can verify channels, create canvases, and post messages; live channel creation was completed through Slack web UI.
 
 ## Copy-Ready Prompts
 

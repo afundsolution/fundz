@@ -2,8 +2,8 @@
 """Build the internal Slackbot team sequence for FUNDz/A FUND Solution.
 
 This does not create Slack channels or send Slack messages. It turns the current
-FUNDz proof surfaces into a copy-ready operating packet for Slackbot, Slack AI,
-LOGIC, Jay, Lucy, and Brandon.
+FUNDz proof surfaces and live Slack setup receipts into a copy-ready operating
+packet for Slackbot, Slack AI, LOGIC, Jay, Lucy, and Brandon.
 """
 
 from __future__ import annotations
@@ -40,6 +40,10 @@ SLACK_KICKOFF_URL = "https://afundsolution.slack.com/archives/C0AUEF81TKM/p17786
 
 CHANNEL_FIELDS = [
     "channel",
+    "slack_channel_id",
+    "slack_url",
+    "slack_status",
+    "member_status",
     "owner",
     "purpose",
     "recap_setting",
@@ -47,6 +51,26 @@ CHANNEL_FIELDS = [
     "fundz_logic_boundary",
     "source_files",
 ]
+
+LIVE_CHANNELS = {
+    "#afs-daily-board": "C0B35JETX8F",
+    "#fundz-ops": "C0B4FB28QMN",
+    "#logic-disputes": "C0B3NTMC49X",
+    "#lucy-billing": "C0B3EMY7NJX",
+    "#jay-workorders": "C0B3QMR1336",
+    "#owner-review": "C0B3HN18EDT",
+}
+SLACK_TEAM_ID = "T0335UDK8AG"
+
+
+def live_channel_fields(channel: str) -> dict[str, str]:
+    channel_id = LIVE_CHANNELS[channel]
+    return {
+        "slack_channel_id": channel_id,
+        "slack_url": f"https://app.slack.com/client/{SLACK_TEAM_ID}/{channel_id}",
+        "slack_status": "created_public_not_archived",
+        "member_status": "all_3_workspace_members_added",
+    }
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -98,6 +122,7 @@ def build_channels() -> list[dict[str, str]]:
     return [
         {
             "channel": "#afs-daily-board",
+            **live_channel_fields("#afs-daily-board"),
             "owner": "Brandon",
             "purpose": "One plain-language morning board for what matters now across FUNDz, LOGIC, Lucy, and Jay.",
             "recap_setting": "Daily recap on; mute allowed after recap is configured.",
@@ -107,6 +132,7 @@ def build_channels() -> list[dict[str, str]]:
         },
         {
             "channel": "#fundz-ops",
+            **live_channel_fields("#fundz-ops"),
             "owner": "FUNDz",
             "purpose": "Internal FUNDz operations, safe local autonomy status, customer-service readiness, and blocked work.",
             "recap_setting": "Daily recap on; use summaries for long implementation threads.",
@@ -116,6 +142,7 @@ def build_channels() -> list[dict[str, str]]:
         },
         {
             "channel": "#logic-disputes",
+            **live_channel_fields("#logic-disputes"),
             "owner": "LOGIC",
             "purpose": "Dispute operations, letter context, bureau response questions, and old-letter lookup requests.",
             "recap_setting": "Daily recap on for leadership; thread summaries for each member issue.",
@@ -125,6 +152,7 @@ def build_channels() -> list[dict[str, str]]:
         },
         {
             "channel": "#lucy-billing",
+            **live_channel_fields("#lucy-billing"),
             "owner": "Lucy",
             "purpose": "Billing maintenance, payment proof, archive proof, and owner billing decisions.",
             "recap_setting": "Daily recap on; only unresolved proof-backed rows stay active.",
@@ -134,6 +162,7 @@ def build_channels() -> list[dict[str, str]]:
         },
         {
             "channel": "#jay-workorders",
+            **live_channel_fields("#jay-workorders"),
             "owner": "Jay",
             "purpose": "End-of-day workorder closeout and carried-forward tasks.",
             "recap_setting": "Recap on; huddle notes on if the team meets.",
@@ -143,6 +172,7 @@ def build_channels() -> list[dict[str, str]]:
         },
         {
             "channel": "#owner-review",
+            **live_channel_fields("#owner-review"),
             "owner": "Brandon",
             "purpose": "Only the decisions Brandon must make: approvals, blockers, proof gaps, and send gates.",
             "recap_setting": "Daily recap on; keep noise low.",
@@ -212,8 +242,11 @@ def build_sequence(
             "canvas_url": SLACK_CANVAS_URL,
             "kickoff_message_url": SLACK_KICKOFF_URL,
             "kickoff_channel": "#logic-briefing",
-            "channel_creation_status": "manual_admin_required",
-            "connector_limit": "The available Slack connector can create canvases and post messages, but it cannot create channels.",
+            "channel_creation_status": "created_public_channels_verified",
+            "channel_count": len(channels),
+            "member_status": "All 3 workspace members were added to each created channel.",
+            "verification": "Verified by Slack channel lookup on 2026-05-13: all six channels are public_channel and Not Archived.",
+            "connector_limit": "The Slack connector can verify channels, create canvases, and post messages; live channel creation was completed through Slack web UI.",
         },
         "current_fundz_context": {
             "work_queue_rows": len(work_rows),
@@ -251,8 +284,7 @@ def build_sequence(
             },
         ],
         "rollout_steps": [
-            "Create the six internal channels manually in Slack.",
-            "Pin this sequence packet and the relevant source files/canvases in each channel.",
+            "Use the six live internal Slack channels and pin this sequence packet plus relevant source files/canvases in each channel.",
             "Turn on recaps for #afs-daily-board, #fundz-ops, #logic-disputes, #lucy-billing, and #owner-review.",
             "Use the shared Slackbot context-packet prompt for searches and summaries.",
             "Use FUNDz/LOGIC prompts for decisions, proof status, and next actions.",
@@ -300,7 +332,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Blocking or decision rows: {report['current_fundz_context']['blocking_or_decision_rows']}",
         f"- Status counts: {', '.join(f'{key}={value}' for key, value in counts.items() if key)}",
         "",
-        "## Channels To Create",
+        "## Live Channels",
         "",
     ]
 
@@ -309,6 +341,10 @@ def render_markdown(report: dict[str, Any]) -> str:
             [
                 f"### {channel['channel']}",
                 "",
+                f"- Slack ID: {channel['slack_channel_id']}",
+                f"- Slack link: {channel['slack_url']}",
+                f"- Slack status: {channel['slack_status']}",
+                f"- Members: {channel['member_status']}",
                 f"- Owner: {channel['owner']}",
                 f"- Purpose: {channel['purpose']}",
                 f"- Slack AI use: {channel['slack_ai_use']}",
@@ -344,6 +380,9 @@ def render_markdown(report: dict[str, Any]) -> str:
                 f"- Kickoff message: {live_setup['kickoff_message_url']}",
                 f"- Kickoff channel: {live_setup['kickoff_channel']}",
                 f"- Channel creation status: {live_setup['channel_creation_status']}",
+                f"- Channel count: {live_setup['channel_count']}",
+                f"- Members: {live_setup['member_status']}",
+                f"- Verification: {live_setup['verification']}",
                 f"- Connector limit: {live_setup['connector_limit']}",
             ]
         )
