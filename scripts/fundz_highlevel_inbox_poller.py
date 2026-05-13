@@ -36,6 +36,8 @@ REPLY_QUEUE = STATE_DIR / "classified-replies.jsonl"
 CUSTOMER_MEMORY = STATE_DIR / "customer-memory.jsonl"
 CUSTOMER_SUMMARIES = STATE_DIR / "customer-summaries.json"
 REPLY_RECEIPTS = STATE_DIR / "reply-receipts.jsonl"
+APP_PORTAL_PROOF_JSONL = STATE_DIR / "app-portal-event-proof.jsonl"
+APP_PORTAL_PROOF_MD = STATE_DIR / "app-portal-event-proof.md"
 MANUAL_IMPORT_DIR = ROOT / "data" / "local" / "highlevel-inbox-manual-imports"
 MANUAL_QUEUE_CSV = STATE_DIR / "manual-inbox-workaround.csv"
 MANUAL_QUEUE_MD = STATE_DIR / "manual-inbox-workaround.md"
@@ -74,6 +76,15 @@ REPLY_CLASS_PATTERNS = {
 FOLLOW_UP_LABELS = {"billing", "cancel", "complaint", "document_request", "app_access", "score_concern", "dispute_update"}
 SENSITIVE_OWNER_LABELS = {"billing", "cancel", "complaint", "document_request"}
 LIVE_HOLD_LABELS = {"billing", "cancel", "complaint", "document_request", "app_access", "score_concern", "dispute_update"}
+APP_PORTAL_SIGNAL_TERMS = {
+    "app",
+    "app message",
+    "app_message",
+    "credit tracker",
+    "disputefox",
+    "mobile app sms",
+    "portal",
+}
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -257,6 +268,113 @@ def build_memory_summary(labels: list[str], classification: dict[str, Any]) -> s
     if classification.get("customer_tone") == "frustrated":
         return "Customer tone is frustrated; respond calmly with facts, ownership, and a clear next step."
     return "Customer contacted FUNDz; keep context available for the next reply."
+
+
+def app_portal_signals(payload: dict[str, Any]) -> list[str]:
+    values = [
+        payload.get("messageType"),
+        payload.get("channel"),
+        payload.get("source"),
+        payload.get("type"),
+        payload.get("lastMessageType"),
+        payload.get("source_file"),
+    ]
+    haystack = " ".join(str(value or "") for value in values).lower()
+    return sorted(term for term in APP_PORTAL_SIGNAL_TERMS if term in haystack)
+
+
+def is_app_portal_payload(payload: dict[str, Any], classification: dict[str, Any] | None = None) -> bool:
+    labels = set((classification or {}).get("labels", []))
+    return bool(app_portal_signals(payload) or "app_access" in labels)
+
+
+def proof_row_has_message(path: Path, message_id: str) -> bool:
+    if not message_id or not path.exists():
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if str(row.get("message_id") or "") == message_id:
+            return True
+    return False
+
+
+def rebuild_app_portal_proof_markdown(path: Path | None = None, output: Path | None = None) -> None:
+    path = path or APP_PORTAL_PROOF_JSONL
+    output = output or APP_PORTAL_PROOF_MD
+    rows = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+    lines = [
+        "# FUNDz App / Portal Event Proof",
+        "",
+        "Local evidence that HighLevel/manual intake observed Credit Tracker app, DisputeFox portal, or Mobile App SMS-style message events.",
+        "",
+        "No replies, sends, DF edits, AutoFox edits, campaign assignments, or billing edits are performed by this proof file.",
+        "",
+        f"- Captured events: {len(rows)}",
+        f"- Needs Brandon review: {sum(1 for row in rows if row.get('needs_brandon_reply'))}",
+        f"- Open follow-up: {sum(1 for row in rows if row.get('needs_follow_up'))}",
+        "",
+        "## Recent Events",
+    ]
+    for row in rows[-25:]:
+        labels = ",".join(row.get("classification", []) or ["unclassified"])
+        signals = ",".join(row.get("signals", []) or ["app/portal"])
+        lines.append(
+            f"- {row.get('last_message_date') or row.get('time')} | "
+            f"{row.get('contact') or 'Unknown'} | {row.get('message_type') or 'unknown'} | "
+            f"{labels} | {signals} | {row.get('proof_status')}"
+        )
+    if not rows:
+        lines.append("- No app/portal events captured yet.")
+    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_app_portal_proof(payload: dict[str, Any], classification: dict[str, Any], proof_status: str) -> None:
+    if not is_app_portal_payload(payload, classification):
+        return
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    message_id = value_for(payload, ("message_id", "messageId", "event_id", "eventId"))
+    if proof_row_has_message(APP_PORTAL_PROOF_JSONL, message_id):
+        return
+    row = {
+        "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "message_id": message_id,
+        "contact_id": contact_value(payload, "contact_id"),
+        "conversation_id": contact_value(payload, "conversation_id"),
+        "contact": payload.get("name") or payload.get("first_name") or "",
+        "direction": payload.get("direction") or "",
+        "message_type": payload.get("messageType") or payload.get("lastMessageType") or payload.get("channel") or "",
+        "source": payload.get("source") or "",
+        "source_file": payload.get("source_file") or "",
+        "last_message_date": payload.get("lastMessageDate") or "",
+        "signals": app_portal_signals(payload),
+        "classification": classification.get("labels", []),
+        "needs_follow_up": bool(classification.get("needs_follow_up")),
+        "needs_brandon_reply": bool(classification.get("needs_brandon_reply")),
+        "proof_status": proof_status,
+        "message_preview": message_text(payload)[:300],
+    }
+    with APP_PORTAL_PROOF_JSONL.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(redact_sensitive(row), ensure_ascii=True, sort_keys=True) + "\n")
+    rebuild_app_portal_proof_markdown()
 
 
 def reply_queue_has_message(message_id: str) -> bool:
@@ -610,6 +728,7 @@ def poll_manual_imports(path: Path = MANUAL_IMPORT_DIR) -> dict[str, Any]:
             seen.add(message_id)
             classification = classify_inbound_reply(message_text(payload))
             row = manual_queue_row(payload, classification)
+            write_app_portal_proof(payload, classification, "captured_from_manual_import_no_send")
             if row["status"] != "Review" and message_text(payload):
                 write_reply_queue(payload, classification)
             queue_rows.append(row)
@@ -659,6 +778,7 @@ def fetch_conversations(location_id: str, limit: int, status: str) -> tuple[int,
 def handle_payload(payload: dict[str, Any], live: bool) -> dict[str, Any]:
     message_id = value_for(payload, ("message_id", "messageId", "event_id", "eventId"))
     classification = classify_inbound_reply(message_text(payload))
+    write_app_portal_proof(payload, classification, "captured_from_highlevel_poll_no_send" if not live else "captured_before_live_gate")
     allowed, reason = should_handle(payload)
     if not allowed:
         write_poll_log("message_ignored", {"reason": reason, "classification": classification, "payload": payload})

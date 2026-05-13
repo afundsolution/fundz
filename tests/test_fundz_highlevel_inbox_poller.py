@@ -220,6 +220,74 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         self.assertIn("verified customer-service context", poller.live_reply_hold_reason(score))
         self.assertIn("verified customer-service context", poller.live_reply_hold_reason(app_access))
 
+    def test_app_portal_payload_writes_local_proof_before_handle_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = {
+                "message_id": "msg-app-proof-1",
+                "conversation_id": "conv-app-proof-1",
+                "name": "Brandon Jordan",
+                "message": "hey",
+                "messageType": "App_Message",
+                "direction": "inbound",
+                "lastMessageDate": "2026-05-13T09:10:00.000Z",
+            }
+
+            with (
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_JSONL", base / "app-proof.jsonl"),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_MD", base / "app-proof.md"),
+                mock.patch.object(poller, "has_seen", return_value=False),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "mark_seen"),
+                mock.patch.object(poller, "draft_bridge_reply") as draft_bridge_reply,
+                mock.patch.object(poller, "send_reply") as send_reply,
+            ):
+                result = poller.handle_payload(payload, live=False)
+
+            proof = __import__("json").loads((base / "app-proof.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            proof_markdown = (base / "app-proof.md").read_text(encoding="utf-8")
+
+        self.assertFalse(result["handled"])
+        self.assertEqual(result["reason"], "missing contact id")
+        self.assertEqual(proof["message_id"], "msg-app-proof-1")
+        self.assertEqual(proof["proof_status"], "captured_from_highlevel_poll_no_send")
+        self.assertIn("app", proof["signals"])
+        self.assertIn("No replies, sends", proof_markdown)
+        draft_bridge_reply.assert_not_called()
+        send_reply.assert_not_called()
+
+    def test_manual_import_writes_app_portal_proof_without_sending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            import_dir = base / "imports"
+            import_dir.mkdir()
+            source = import_dir / "credit-tracker-app-export.csv"
+            source.write_text(
+                "contact,last message,date,direction,contact_id,conversation_id,lastMessageType\n"
+                "Brandon Jordan,hey,2026-05-13T09:10:00Z,inbound,contact-app,conv-app,TYPE_APP_MESSAGE\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(poller, "MANUAL_QUEUE_CSV", base / "manual.csv"),
+                mock.patch.object(poller, "MANUAL_QUEUE_MD", base / "manual.md"),
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_JSONL", base / "app-proof.jsonl"),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_MD", base / "app-proof.md"),
+                mock.patch.object(poller, "load_env_file"),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "write_reply_queue"),
+                mock.patch.object(poller, "send_reply") as send_reply,
+            ):
+                summary = poller.poll_manual_imports(import_dir)
+
+            proof = __import__("json").loads((base / "app-proof.jsonl").read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertEqual(summary["sent"], 0)
+        self.assertEqual(proof["message_type"], "App_Message")
+        self.assertEqual(proof["proof_status"], "captured_from_manual_import_no_send")
+        send_reply.assert_not_called()
+
     def test_live_hold_does_not_send_sensitive_reply(self):
         payload = {
             "message_id": "msg-hold-1",

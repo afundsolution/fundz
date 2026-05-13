@@ -406,6 +406,13 @@ make highlevel-inbox-workaround
 
 This writes a local classified queue at `data/local/highlevel-inbox-poller/manual-inbox-workaround.csv` and `.md`. It does not send replies.
 
+App/portal proof receipts are also written locally when the poller or manual workaround sees Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, or app-access message signals:
+
+- `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl`
+- `data/local/highlevel-inbox-poller/app-portal-event-proof.md`
+
+These files are proof-only. They do not send replies or edit HighLevel, DF, AutoFox, billing, or campaigns.
+
 To diagnose a real webhook payload before enabling live sends:
 
 ```sh
