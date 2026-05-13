@@ -70,7 +70,8 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["messageType"], "App_Message")
-        self.assertEqual(payload["channel"], "credit-tracker")
+        self.assertNotIn("channel", payload)
+        self.assertIn("app_message", poller.app_portal_signals(payload))
 
     def test_normalize_whatsapp_is_not_app_message(self):
         self.assertEqual(poller.normalize_message_type("TYPE_WHATSAPP"), "WhatsApp")
@@ -308,6 +309,50 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         self.assertEqual(proof["message_type"], "App_Message")
         self.assertEqual(proof["proof_status"], "captured_from_manual_import_no_send")
         send_reply.assert_not_called()
+
+    def test_manual_import_plain_sms_does_not_write_app_portal_proof(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            import_dir = base / "imports"
+            import_dir.mkdir()
+            source = import_dir / "highlevel-export.csv"
+            source.write_text(
+                "contact,last message,date,direction,contact_id,conversation_id,lastMessageType\n"
+                "Ada Lovelace,What happened?,2026-05-13T09:10:00Z,inbound,contact-1,conv-1,SMS\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(poller, "MANUAL_QUEUE_CSV", base / "manual.csv"),
+                mock.patch.object(poller, "MANUAL_QUEUE_MD", base / "manual.md"),
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_JSONL", base / "app-proof.jsonl"),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_MD", base / "app-proof.md"),
+                mock.patch.object(poller, "load_env_file"),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "write_reply_queue"),
+                mock.patch.object(poller, "send_reply"),
+            ):
+                summary = poller.poll_manual_imports(import_dir)
+
+        self.assertEqual(summary["imported"], 1)
+        self.assertFalse((base / "app-proof.jsonl").exists())
+
+    def test_normalized_plain_highlevel_sms_is_not_app_portal_proof(self):
+        payload = poller.normalize_conversation(
+            {
+                "id": "conv-plain",
+                "contactId": "contact-plain",
+                "lastMessageId": "msg-plain",
+                "lastMessageType": "SMS",
+                "lastMessageBody": "What happened?",
+                "contactName": "Ada Lovelace",
+            },
+            "loc-1",
+        )
+        classification = poller.classify_inbound_reply(poller.message_text(payload))
+
+        self.assertEqual(payload.get("channel", ""), "")
+        self.assertFalse(poller.is_app_portal_payload(payload, classification))
 
     def test_live_hold_does_not_send_sensitive_reply(self):
         payload = {

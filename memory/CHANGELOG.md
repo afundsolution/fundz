@@ -2,6 +2,44 @@
 
 ## 2026-05-13
 
+### Supervisor Live AutoFox Tip 04 Completion
+
+- Completed the controlled live DF/Pulse template setup for `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Saved `Step 9 - Credit Tip 04 - Statement Dates (24 Days)` with `Delay / Days / 24`, Mobile App SMS action `Credit Tip 04 - Statement Dates Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 04 Step 9`.
+- Verified the Step 9 row showed `Mobile App SMS`, `Note Created`, and `Details`, with status `In Progress / Active`.
+- Added live proof receipt `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md`.
+- Updated generated command-center wording so Credit Tip 04 is no longer listed as the pending target; the next gated AutoFox target is Tip 05 only if Brandon approves another DF template edit.
+- Safety boundary held: no campaign assignment, no manual client send, no regular SMS removal, no broad `Update Data Fields`, and no Tip 05+ work.
+
+### Agent C Approved-Row Collapse
+
+- Inspected `data/local/command-center/fundz-work-queue.csv`, `data/local/command-center/fundz-command-center.md` Queue Truth, `data/local/command-center/task-completion-audit-2026-05-12.md`, `data/local/maintenance-cleanup/fundz-billing-revenue-proof-map-2026-05-13.md` / `.csv`, send ledger, archive trail, and proof evidence paths.
+- Added a deterministic command-center generator rule that only collapses Approved rows when the billing/revenue proof map names the client and gives a concrete local proof outcome.
+- Result after `make command-center`: 16 rows collapsed out of the 141 Approved rows; 15 unresolved billing/payment rows are now `Blocked`, and Victoria Robinson is `Done` from the authenticated DF archive receipt.
+- Current Queue Truth: 225 total rows, 125 Approved, 37 Needs Brandon, 46 Done, 1 Sent, 16 Blocked, 0 Failed, 0 Proof Needed, 0 Hold.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 58 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No live send, reminder send, billing edit, DF/AutoFox edit/archive, campaign assignment, HighLevel live action, browser action, webhook wiring, Supabase write, or payment-ledger cash row was performed/added.
+
+### Agent B Billing / Payment Proof Closer
+
+- Rechecked the Lucy billing proof map, payment-proof ledger, ScoreFusion reminder receipt, send ledger, archive trail, owner billing updates, and local receipt files without live actions.
+- Found additional local proof for Victoria Robinson: `data/local/semi-autonomous/receipts/df-archive-arthur-victoria-exact-2026-05-12T10-58-49-357Z.json` shows the May 12 DF archive response succeeded and Victoria moved from active to archived.
+- Updated `data/local/maintenance-cleanup/fundz-billing-revenue-proof-map-2026-05-13.md` and `.csv` so Victoria is archive-closed locally instead of live-archive-gated.
+- Current counts: 16 proof-map rows, 7 reminder-send-proof rows, 1 archive-proof row, 15 still-billing-issue rows, 0 rows needing live DF archive receipt, and 0 payment-proof ledger receipt rows.
+- Did not update the payment ledger because the proof found was archive proof, not payment or revenue proof.
+- No reminder send, billing edit, DF/AutoFox archive/edit, campaign assignment, client reply, HighLevel live action, browser action, Supabase write, or payment-ledger cash row was performed/added.
+
+### Agent D Customer-Service App/Portal API + Manual Proof Path
+
+- Inspected `scripts/fundz_highlevel_inbox_poller.py`, app/portal proof receipts, manual import docs, and current handoff/status/next-step files.
+- Fixed the API/manual-import app/portal proof path so plain HighLevel/manual rows are no longer force-labeled as `credit-tracker` channel proof; app/portal proof now requires real message type, channel/source, or app-access language.
+- Added regression tests proving plain SMS/manual rows such as `What happened?` do not write app/portal proof, while `App Message` rows still do.
+- Updated the manual workaround wording to cover HighLevel, DF, or Credit Tracker admin exports/copies when the app/portal event is not exposed by the HighLevel API.
+- Added a local manual-import copy of the existing Brandon Jordan DF `All Messages` App Message receipt and ran `make highlevel-inbox-workaround`; it wrote one no-send proof row to `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` and `.md`.
+- Captured proof row: Brandon Jordan, inbound `App_Message`, message `hey`, source `disputefox-admin-all-messages`, proof status `captured_from_manual_import_no_send`.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 24 tests OK; `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed; `make highlevel-inbox-workaround` imported 1 row, wrote 1 proof event, and sent 0.
+- No live reply, client send, HighLevel live poller, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, browser action, or Supabase write was performed.
+
 ### Agent A AutoFox Tip 04 Executor/Preflight
 
 - Inspected the sleep-mode gate, current memory handoff/status/next steps, Tip 04 packet, prior Tip 01-03 proof receipts, command-center generator, and focused tests.

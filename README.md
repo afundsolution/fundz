@@ -400,7 +400,7 @@ Live replies require all of these:
 
 If the poller reports `The token is not authorized for this scope`, update the HighLevel Private Integration scopes to include conversation/message read access, then rerun the preview command.
 
-If HighLevel API permissions are blocked, use the manual inbox workaround. Export/copy business-only HighLevel conversation rows to `data/local/highlevel-inbox-manual-imports/` as CSV, JSON, TXT, or Markdown, then run:
+If HighLevel API permissions are blocked or the app/portal event is only visible in DF/Credit Tracker admin, use the manual inbox workaround. Export/copy business-only HighLevel, DF, or Credit Tracker conversation rows to `data/local/highlevel-inbox-manual-imports/` as CSV, JSON, TXT, or Markdown, then run:
 
 ```sh
 make highlevel-inbox-workaround
@@ -414,7 +414,7 @@ App/portal proof receipts are also written locally when the poller or manual wor
 - `data/local/highlevel-inbox-poller/app-portal-event-proof.md`
 
 These files are proof-only. They do not send replies or edit HighLevel, DF, AutoFox, billing, or campaigns.
-For the cleanest manual app/portal proof, include export columns such as `lastMessageType`, `channel`, `source`, `contact_id`, `conversation_id`, `date`, and `last message`. Plain SMS rows are not treated as app/portal proof unless the channel/source or message text clearly identifies the Credit Tracker app, portal, App Message, or Mobile App SMS.
+For the cleanest manual app/portal proof, include export columns such as `lastMessageType`, `channel`, `source`, `contact_id`, `conversation_id`, `date`, and `last message`. Plain SMS rows are not treated as app/portal proof unless the channel/source, message type, or message text clearly identifies the Credit Tracker app, DisputeFox portal, App Message, or Mobile App SMS.
 
 To diagnose a real webhook payload before enabling live sends:
 

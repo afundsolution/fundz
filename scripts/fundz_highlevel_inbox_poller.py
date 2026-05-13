@@ -529,6 +529,14 @@ def normalize_message_type(raw: str) -> str:
     return "SMS"
 
 
+def normalized_row_channel(row: dict[str, Any]) -> str:
+    return row_value(row, "channel", "messageChannel", "message_channel")
+
+
+def normalized_row_source(row: dict[str, Any], default: str = "") -> str:
+    return row_value(row, "source", "messageSource", "message_source", "provider") or default
+
+
 def contact_name(conversation: dict[str, Any]) -> str:
     contact = conversation.get("contact")
     if isinstance(contact, dict):
@@ -561,11 +569,13 @@ def normalize_conversation(conversation: dict[str, Any], location_id: str) -> di
     message_id = conversation_message_id(conversation)
     message_type = normalize_message_type(str(conversation.get("lastMessageType") or conversation.get("messageType") or ""))
     name = contact_name(conversation)
+    channel = str(conversation.get("channel") or conversation.get("messageChannel") or "").strip()
+    source = str(conversation.get("source") or conversation.get("messageSource") or "highlevel-poller").strip()
     payload = {
         "event_id": message_id,
         "message_id": message_id,
-        "source": "highlevel-poller",
-        "channel": "credit-tracker",
+        "source": source,
+        "channel": channel,
         "direction": "inbound",
         "type": "InboundMessage",
         "messageType": message_type,
@@ -613,9 +623,9 @@ def normalize_manual_row(row: dict[str, Any], source: Path, index: int, location
     payload = {
         "event_id": message_id,
         "message_id": message_id,
-        "source": "highlevel-manual-import",
+        "source": normalized_row_source(row, "highlevel-manual-import"),
         "source_file": str(source),
-        "channel": "credit-tracker",
+        "channel": normalized_row_channel(row),
         "direction": direction,
         "type": "InboundMessage",
         "messageType": normalize_message_type(row_value(row, "lastMessageType", "last_message_type", "messageType", "message_type", "channel", "type")),
@@ -685,7 +695,7 @@ def manual_queue_row(payload: dict[str, Any], classification: dict[str, Any]) ->
         "status": status,
         "owner": owner,
         "next_step": next_step,
-        "proof_required": "HighLevel export row or screenshot showing the inbound message.",
+        "proof_required": "HighLevel, DF, or Credit Tracker export row/screenshot showing the inbound message.",
         "evidence": payload.get("source_file", "manual import"),
     }
 
@@ -701,7 +711,7 @@ def write_manual_queue_outputs(rows: list[dict[str, Any]], summary: dict[str, An
     lines = [
         "# FUNDz HighLevel Inbox Workaround",
         "",
-        "This file is built from local HighLevel exports/copies because the HighLevel API token is still blocked.",
+        "This file is built from local HighLevel, DF, or Credit Tracker inbox exports/copies when the API path is blocked or incomplete.",
         "",
         f"- Imported: {summary['imported']}",
         f"- Needs Brandon: {summary['needs_brandon']}",

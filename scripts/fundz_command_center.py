@@ -84,6 +84,9 @@ MAINTENANCE_CLEANUP_SUMMARY_JSON = (
 BILLING_MAINTENANCE_REVIEW_CSV = (
     ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-billing-maintenance-review.csv"
 )
+BILLING_REVENUE_PROOF_MAP_CSV = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-billing-revenue-proof-map-2026-05-13.csv"
+)
 DUPLICATE_BILLING_REVIEW_CSV = (
     ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-duplicate-billing-review.csv"
 )
@@ -540,6 +543,45 @@ def app_recovery_proofs() -> dict[str, str]:
     return proofs
 
 
+def load_billing_revenue_proof_map(path: Path | None = None) -> dict[str, dict[str, str]]:
+    """Load proof-backed billing closeout rows that should not stay Approved outreach."""
+    path = path or BILLING_REVENUE_PROOF_MAP_CSV
+    rows: dict[str, dict[str, str]] = {}
+    for row in read_csv_rows(path):
+        name_key = normalize_name(str(row.get("client_name") or ""))
+        if name_key:
+            rows[name_key] = row
+    return rows
+
+
+def apply_billing_revenue_proof_to_queue_row(row: dict[str, Any], proof_row: dict[str, str]) -> None:
+    decision = str(proof_row.get("local_decision") or "").strip().lower()
+    evidence = str(proof_row.get("evidence") or "").strip() or relative_label(BILLING_REVENUE_PROOF_MAP_CSV)
+    next_action = str(proof_row.get("next_action") or "").strip()
+    missing_receipt = str(proof_row.get("missing_live_receipt") or "").strip()
+    proof_found = str(proof_row.get("proof_found") or "").strip()
+
+    row["evidence"] = evidence
+    row["proof"] = proof_found
+    row["browser_required"] = "no"
+    row["safe_fix_applied"] = "billing_revenue_proof_map"
+
+    if decision == "archive_closed_locally":
+        row["queue_status"] = "Done"
+        row["owner"] = "FUNDz"
+        row["next_step"] = next_action or "Archive receipt is recorded; do not reopen active billing outreach without fresh contrary proof."
+        row["proof_required"] = "Authenticated DF archive receipt recorded; payment proof remains separate from archive proof."
+        row["do_not_send_because"] = "Archive receipt recorded; no reminder resend or active billing outreach from this row."
+        return
+
+    if decision == "still_billing_issue":
+        row["queue_status"] = "Blocked"
+        row["owner"] = "FUNDz"
+        row["next_step"] = next_action or "Keep out of automated outreach until fresh payment, ScoreFusion, DF, or owner proof appears."
+        row["proof_required"] = missing_receipt or "Payment receipt or billing-system clearance required before closeout."
+        row["do_not_send_because"] = "Billing/payment proof is still missing; do not treat Approved as send-ready."
+
+
 def row_id_for_queue(row: dict[str, Any], suffix: str = "OUTREACH") -> str:
     base = normalize_name(str(row.get("client_key") or row.get("client_name") or "unknown")).replace(" ", "-")
     return f"FUNDZ-{suffix}-{base[:60] or 'unknown'}".upper()
@@ -585,6 +627,7 @@ def build_work_queue(report: dict[str, Any]) -> list[dict[str, Any]]:
     suppressions = load_queue_suppressions()
     failures = failed_rollout_clients()
     recoveries = app_recovery_proofs()
+    billing_proof_map = load_billing_revenue_proof_map()
     rows: list[dict[str, Any]] = []
 
     for ledger_row in report.get("ledger", []):
@@ -630,6 +673,8 @@ def build_work_queue(report: dict[str, Any]) -> list[dict[str, Any]]:
             row["browser_required"] = "no"
             row["do_not_send_because"] = "No broad rollout approval; Anthony proof only."
             row["safe_fix_applied"] = "app_access_proof_captured"
+        if name_key in billing_proof_map and row["queue_status"] == "Approved":
+            apply_billing_revenue_proof_to_queue_row(row, billing_proof_map[name_key])
         suppression = first_lookup(
             [
                 str(ledger_row.get("client_key") or ""),
@@ -3176,11 +3221,11 @@ def write_autofox_migration_checklist(report: dict[str, Any], path: Path = AUTOF
         "- Client (step 09) - Round 3 Score Update: matching Mobile App SMS saved.",
         "- Client (step 11) - Round 4 Score Update: matching Mobile App SMS saved.",
         "- FUNDz App Communication Notice - Email SMS App: SMS, Mobile App SMS, and Email are saved in the instant step.",
-        "- Client (step 04) - Round 1 Sent & Campaign: Credit Tip 01, 02, and 03 delayed steps have saved Mobile App SMS actions and internal note markers.",
+        "- Client (step 04) - Round 1 Sent & Campaign: Credit Tip 01, 02, 03, and 04 delayed steps have saved Mobile App SMS actions and internal note markers.",
         "",
         "## Still Needs Review",
-        "- Next controlled credit-tip target: Credit Tip 04 only in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`). Create Step 9 as `Credit Tip 04 - Statement Dates (24 Days)` with Delay / Days / 24, add `Credit Tip 04 - Statement Dates Mobile App SMS`, add `FUNDz marker - Credit Tip 04 Step 9`, and save screenshot/receipt proof.",
-        "- After Tip 04 is proven, Credit Tip 05 through Credit Tip 20 still need DF delayed Mobile App SMS actions saved one controlled step at a time.",
+        "- Credit Tip 04 is complete in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`) as Step 9 with Delay / Days / 24, `Credit Tip 04 - Statement Dates Mobile App SMS`, and `FUNDz marker - Credit Tip 04 Step 9`. Proof receipt: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md`.",
+        "- Next controlled credit-tip target, only if Brandon approves another DF edit, is Credit Tip 05. Credit Tip 05 through Credit Tip 20 still need DF delayed Mobile App SMS actions saved one controlled step at a time.",
         "- Round 5 through Round 10 score-update campaigns need DF proof before relying on Mobile App SMS coverage.",
         "- Problem/Owner Review internal task actions need DF proof for billing issue, app SMS failed, no app login, no import, no response, duplicate messaging, stale round, and high-touch confusion.",
         "- Any onboarding, reminder, reactivation, billing-warning, cancellation, or custom AutoFox sequence outside the verified list above.",
@@ -3245,20 +3290,20 @@ def write_member_experience_system(
             "",
             "## Credit Tip Implementation Status",
             "",
-            "Implementation status: the DF delayed-step blocker is cleared for the controlled Round 1 template. Credit Tips 01, 02, and 03 are saved with Mobile App SMS actions and internal note markers in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).",
+            "Implementation status: the DF delayed-step blocker is cleared for the controlled Round 1 template. Credit Tips 01, 02, 03, and 04 are saved with Mobile App SMS actions and internal note markers in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).",
             "",
-            "Next controlled target: Credit Tip 04 only. Use the same pattern: one delayed step, one Mobile App SMS action, one internal DF note marker, screenshot proof, and no campaign assignment or manual client send.",
+            "Next controlled target: Credit Tip 05 only, and only after Brandon approves another DF template edit. Use the same pattern: one delayed step, one Mobile App SMS action, one internal DF note marker, screenshot proof, and no campaign assignment or manual client send.",
             "",
-            "## Next Controlled Tip 04 Review Packet",
+            "## Completed Tip 04 Proof",
             "",
             "- Workflow: `Client (step 04) - Round 1 Sent & Campaign`",
             "- AutoFox ID: `160038`",
-            "- New step to create: `Step 9 - Credit Tip 04 - Statement Dates (24 Days)`",
+            "- Saved step: `Step 9 - Credit Tip 04 - Statement Dates (24 Days)`",
             "- Step timing: `Start = Delay`, `Interval Type = Days`, `Interval Value = 24`",
             "- Mobile App SMS action: `Credit Tip 04 - Statement Dates Mobile App SMS`",
             "- Internal note marker title: `FUNDz marker - Credit Tip 04 Step 9`",
             "- Operator preflight/checklist: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-operator-preflight-20260513.md`",
-            "- Receipt target: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md` plus screenshot",
+            "- Live receipt: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md`",
             "",
             "Mobile App SMS body:",
             "",
@@ -3276,12 +3321,11 @@ def write_member_experience_system(
             "FUNDz status marker: Round 1 AutoFox Step 9 is Credit Tip 04 - Statement Dates, delayed 24 days, with Mobile App SMS saved. Source workflow: Client (step 04) - Round 1 Sent & Campaign / autofox_id=160038. No manual client send or campaign assignment was performed in this setup pass.",
             "```",
             "",
-            "Review gates before live DF work:",
+            "Live setup boundary:",
             "",
-            "- Confirm Tips 01-03 are still visible with `Mobile App SMS` and `Note Created` rows.",
-            "- Do not use `Update Data Fields` unless a clearly dedicated safe marker field is visible.",
-            "- Do not assign the campaign, manually send a client message, remove regular SMS, or expand beyond Tip 04.",
-            "- After saving, verify the Step 9 row shows both `Mobile App SMS` and `Note Created`, then capture receipt notes/screenshots before moving to Tip 05.",
+            "- Step 9 was verified on screen with `Mobile App SMS` and `Note Created` visible.",
+            "- No campaign assignment, manual client send, regular SMS removal, broad `Update Data Fields`, or Tip 05+ expansion was performed.",
+            "- Do not move to Tip 05 until Brandon approves another controlled DF template edit.",
             "",
             "## Credit Tip Schedule",
             "| Tip | Round | Delay | Action name | Topic |",

@@ -383,10 +383,11 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("Round Updates", text)
             self.assertIn("Education / Credit Tips", text)
             self.assertIn("Problem / Owner Review", text)
-            self.assertIn("Next Controlled Tip 04 Review Packet", text)
+            self.assertIn("Completed Tip 04 Proof", text)
             self.assertIn("Step 9 - Credit Tip 04 - Statement Dates (24 Days)", text)
             self.assertIn("Interval Value = 24", text)
             self.assertIn("FUNDz marker - Credit Tip 04 Step 9", text)
+            self.assertIn("Next controlled target: Credit Tip 05 only", text)
             self.assertIn("autofox-credit-tip-04-step9-operator-preflight-20260513.md", text)
             self.assertIn("No manual client send or campaign assignment was performed", text)
             self.assertIn("Credit Tip 20 - Long-Term Habits", text)
@@ -1717,6 +1718,88 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertEqual(rows[0]["proof"], "proof.md")
         self.assertEqual(rows[0]["evidence"], "proof.md")
         self.assertIn("app_access_proof_captured", rows[0]["safe_fix_applied"])
+
+    def test_billing_proof_map_blocks_unresolved_approved_row(self) -> None:
+        report = {
+            "generated_at": "2026-05-13T10:00:00-0500",
+            "ledger": [
+                {
+                    "client_key": "name:ashley-foster",
+                    "client_name": "Ashley Foster",
+                    "next_touch_status": "owner-review-before-message",
+                    "phase": "billing-review",
+                    "priority_score": "205",
+                    "flags": "payment_attention",
+                }
+            ],
+            "blockers": [],
+        }
+        billing_map = {
+            "ashley foster": {
+                "local_decision": "still_billing_issue",
+                "proof_found": "Reminder receipt exists, but active billing issue remains.",
+                "missing_live_receipt": "Payment receipt or billing-system clearance after reminder.",
+                "next_action": "Do not resend; wait for payment proof.",
+                "evidence": "receipt.md",
+            }
+        }
+
+        with (
+            mock.patch.object(command_center, "load_owner_decisions", return_value={"ashley foster": {"owner_decision": "approved"}}),
+            mock.patch.object(command_center, "load_queue_suppressions", return_value={}),
+            mock.patch.object(command_center, "failed_rollout_clients", return_value={}),
+            mock.patch.object(command_center, "app_recovery_proofs", return_value={}),
+            mock.patch.object(command_center, "load_billing_revenue_proof_map", return_value=billing_map),
+            mock.patch.object(command_center, "highlevel_reply_work_queue_rows", return_value=[]),
+        ):
+            rows = command_center.build_work_queue(report)
+
+        row = rows[0]
+        self.assertEqual(row["queue_status"], "Blocked")
+        self.assertEqual(row["evidence"], "receipt.md")
+        self.assertEqual(row["proof"], "Reminder receipt exists, but active billing issue remains.")
+        self.assertIn("billing_revenue_proof_map", row["safe_fix_applied"])
+        self.assertIn("Billing/payment proof is still missing", row["do_not_send_because"])
+
+    def test_billing_proof_map_closes_archive_receipt_row(self) -> None:
+        report = {
+            "generated_at": "2026-05-13T10:00:00-0500",
+            "ledger": [
+                {
+                    "client_key": "name:victoria-robinson",
+                    "client_name": "Victoria Robinson",
+                    "next_touch_status": "owner-review-before-message",
+                    "phase": "billing-review",
+                    "priority_score": "145",
+                    "flags": "payment_attention",
+                }
+            ],
+            "blockers": [],
+        }
+        billing_map = {
+            "victoria robinson": {
+                "local_decision": "archive_closed_locally",
+                "proof_found": "Authenticated DF archive receipt found.",
+                "next_action": "Do not send reminder or reopen archive work.",
+                "evidence": "archive.json",
+            }
+        }
+
+        with (
+            mock.patch.object(command_center, "load_owner_decisions", return_value={"victoria robinson": {"owner_decision": "approved"}}),
+            mock.patch.object(command_center, "load_queue_suppressions", return_value={}),
+            mock.patch.object(command_center, "failed_rollout_clients", return_value={}),
+            mock.patch.object(command_center, "app_recovery_proofs", return_value={}),
+            mock.patch.object(command_center, "load_billing_revenue_proof_map", return_value=billing_map),
+            mock.patch.object(command_center, "highlevel_reply_work_queue_rows", return_value=[]),
+        ):
+            rows = command_center.build_work_queue(report)
+
+        row = rows[0]
+        self.assertEqual(row["queue_status"], "Done")
+        self.assertEqual(row["evidence"], "archive.json")
+        self.assertEqual(row["proof"], "Authenticated DF archive receipt found.")
+        self.assertIn("Archive receipt recorded", row["do_not_send_because"])
 
     def test_queue_suppression_overrides_failed_row_without_deleting_evidence(self) -> None:
         report = {
