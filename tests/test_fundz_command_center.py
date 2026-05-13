@@ -195,6 +195,8 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "OUTPUT_DIR": base,
                 "COMMAND_CENTER_JSON": base / "cc.json",
                 "COMMAND_CENTER_MD": base / "cc.md",
+                "TODAY_OPERATING_BOARD_MD": base / "today.md",
+                "TODAY_DECISION_QUEUE_CSV": base / "today.csv",
                 "DAILY_BOARD_MD": base / "daily.md",
                 "WORK_QUEUE_CSV": base / "work-queue.csv",
                 "WORK_QUEUE_SHEET_IMPORT_CSV": base / "sheet-import.csv",
@@ -225,6 +227,15 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "PREVIEW_PACKET_DECISION_MD": base / "preview-decision.md",
                 "BILLING_ROLLOUT_TRIAGE_MD": base / "billing-triage.md",
                 "BILLING_ROLLOUT_TRIAGE_CSV": base / "billing-triage.csv",
+                "BILLING_MAINTENANCE_FOCUS_MD": base / "billing-maintenance.md",
+                "BILLING_MAINTENANCE_FOCUS_CSV": base / "billing-maintenance.csv",
+                "ARCHIVE_RECEIPT_TRAIL_MD": base / "archive-receipts.md",
+                "SEND_VISIBILITY_MD": base / "send-visibility.md",
+                "SEND_LEDGER_CSV": base / "send-ledger.csv",
+                "NEXT_SEND_QUEUE_CSV": base / "next-send.csv",
+                "SEND_KILL_SWITCH_MD": base / "kill-switch.md",
+                "SEND_KILL_SWITCH_JSON": base / "kill-switch.json",
+                "SEND_GATE_LOCK_MD": base / "send-gate-lock.md",
                 "CLEAN_BACKUP_PREVIEW_MD": base / "clean-backups.md",
                 "CLEAN_BACKUP_PREVIEW_CSV": base / "clean-backups.csv",
                 "NO_APPROVAL_WORK_CSV": base / "no-approval.csv",
@@ -264,6 +275,10 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertTrue((base / "preview-decision.md").exists())
             self.assertTrue((base / "billing-triage.md").exists())
             self.assertTrue((base / "billing-triage.csv").exists())
+            self.assertTrue((base / "billing-maintenance.md").exists())
+            self.assertTrue((base / "billing-maintenance.csv").exists())
+            self.assertTrue((base / "archive-receipts.md").exists())
+            self.assertTrue((base / "send-gate-lock.md").exists())
             self.assertTrue((base / "clean-backups.md").exists())
             self.assertTrue((base / "clean-backups.csv").exists())
             self.assertTrue((base / "no-approval.csv").exists())
@@ -275,6 +290,9 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("business-rollout.md", paths["business_review_rollout"])
             self.assertIn("preview-decision.md", paths["preview_packet_decision"])
             self.assertIn("billing-triage.md", paths["billing_rollout_triage"])
+            self.assertIn("billing-maintenance.md", paths["billing_maintenance_focus"])
+            self.assertIn("archive-receipts.md", paths["archive_receipt_trail"])
+            self.assertIn("send-gate-lock.md", paths["send_gate_lock"])
             self.assertIn("clean-backups.md", paths["clean_backup_preview"])
 
     def test_communication_control_board_blocks_mobile_app_sms_until_app_ready(self) -> None:
@@ -1064,6 +1082,133 @@ class FundzCommandCenterTests(unittest.TestCase):
 
         self.assertEqual([row["client_name"] for row in rows], ["Grace"])
 
+    def test_today_decision_queue_turns_hold_rows_into_actions(self) -> None:
+        report = {
+            "work_queue": [
+                {
+                    "queue_status": "Hold",
+                    "owner": "Brandon",
+                    "lane": "billing-review",
+                    "client_name": "Ada",
+                    "next_step": "Keep hold until billing proof is checked.",
+                    "proof_required": "Billing proof.",
+                    "evidence": "queue.csv",
+                    "priority_score": "100",
+                    "work_order_id": "WO-1",
+                },
+                {
+                    "queue_status": "Approved",
+                    "client_name": "Ben",
+                },
+            ]
+        }
+
+        rows = command_center.build_today_decision_queue(report)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["client_name"], "Ada")
+        self.assertEqual(rows[0]["decision"], "still_hold_until_required_proof")
+
+    def test_safety_gate_snapshot_keeps_runtime_findings_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            autonomy = base / "autonomy.json"
+            maintenance = base / "maintenance.json"
+            autonomy.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-05-08T13:23:17-0500",
+                        "ok": False,
+                        "successful_steps": 6,
+                        "total_steps": 6,
+                        "runtime": {
+                            "quiet": False,
+                            "active_screens": ["fundz-live-send"],
+                            "active_processes": ["999 python3 scripts/fundz_autofox_live_sender.py"],
+                        },
+                        "safety_findings": ["Unsafe: live FUNDz runtime process(es) appear to be running."],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            maintenance.write_text(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "successful_steps": 7,
+                        "total_steps": 7,
+                        "rollout_packet": {"approval_required": True, "live_send_allowed": False, "selected": 0},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(command_center, "AUTONOMY_STATUS_JSON", autonomy),
+                mock.patch.object(command_center, "MAINTENANCE_AUTOPILOT_STATUS_JSON", maintenance),
+            ):
+                snapshot = command_center.build_safety_gate_snapshot()
+
+        self.assertEqual(snapshot["state"], "Review local runtime")
+        self.assertFalse(snapshot["live_send_allowed"])
+        self.assertEqual(snapshot["rollout_selected"], 0)
+        self.assertEqual(snapshot["maintenance_steps"], "7/7")
+        self.assertEqual(snapshot["unexpected_runtime_screens"], ["fundz-live-send"])
+        self.assertEqual(snapshot["unexpected_runtime_processes"], ["999 python3 scripts/fundz_autofox_live_sender.py"])
+
+    def test_safety_gate_allows_dashboard_reporting_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            autonomy = base / "autonomy.json"
+            maintenance = base / "maintenance.json"
+            autonomy.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-05-08T13:23:17-0500",
+                        "ok": False,
+                        "successful_steps": 6,
+                        "total_steps": 6,
+                        "runtime": {
+                            "quiet": False,
+                            "active_screens": ["fundz-command-center"],
+                            "active_processes": [
+                                "123 python3 scripts/fundz_command_center_server.py --host 127.0.0.1 --port 8797",
+                                "456 cloudflared tunnel --config /Users/turbo/.cloudflared/fundz-command-center.yml run",
+                            ],
+                        },
+                        "safety_findings": [
+                            "Unsafe: live FUNDz screen session(s) are running: fundz-command-center.",
+                            "Unsafe: live FUNDz runtime process(es) appear to be running.",
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            maintenance.write_text(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "successful_steps": 7,
+                        "total_steps": 7,
+                        "rollout_packet": {"approval_required": True, "live_send_allowed": False, "selected": 0},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(command_center, "AUTONOMY_STATUS_JSON", autonomy),
+                mock.patch.object(command_center, "MAINTENANCE_AUTOPILOT_STATUS_JSON", maintenance),
+            ):
+                snapshot = command_center.build_safety_gate_snapshot()
+
+        self.assertEqual(snapshot["state"], "Local reporting safe")
+        self.assertTrue(snapshot["runtime_quiet"])
+        self.assertTrue(snapshot["allowed_reporting_runtime"])
+        self.assertEqual(snapshot["safety_findings"], [])
+        self.assertEqual(snapshot["unexpected_runtime_screens"], [])
+        self.assertEqual(snapshot["unexpected_runtime_processes"], [])
+
     def test_writes_owner_decision_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
@@ -1272,7 +1417,8 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertIn("Workflow App Message rows marked Sent", by_area["Credit Tracker app visibility proof"]["evidence"])
         self.assertEqual(by_area["One-member app-communication campaign pilot"]["status"], "pass")
         self.assertIn("App Message visibility proof", by_area["One-member app-communication campaign pilot"]["evidence"])
-        self.assertEqual(by_area["Broad outreach rollout"]["status"], "blocked")
+        self.assertEqual(by_area["Broad outreach rollout closeout"]["status"], "pass")
+        self.assertIn("parked/gated closeout", by_area["Broad outreach rollout closeout"]["evidence"])
 
     def test_writes_missing_steps_recheck(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1294,6 +1440,26 @@ class FundzCommandCenterTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn("HighLevel inbox reading", text)
             self.assertIn("Fix scope", text)
+
+    def test_command_center_report_includes_operating_map(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "command-center.md"
+            report = {
+                "generated_at": "2026-05-08T12:00:00-0500",
+                "summary": {"active_clients": 2, "owner_review_before_message": 1, "action_counts": {}},
+                "daily_board": [],
+                "work_queue": [],
+                "communication_control_board": [],
+                "governor_alerts": [],
+                "blockers": [],
+            }
+
+            command_center.write_markdown(report, path)
+
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("## Operating Map", text)
+            self.assertIn("A FUND Solution has one Command Center", text)
+            self.assertIn("Message receipts and gates", text)
 
     def test_daily_board_outputs_exactly_five_lines(self) -> None:
         report = {
@@ -1507,6 +1673,36 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertEqual(owner, "FUNDz")
         self.assertIn("App SMS", next_step)
         self.assertIn("Failure receipt", proof)
+
+    def test_app_recovery_proof_closes_failed_rollout_row(self) -> None:
+        report = {
+            "generated_at": "2026-05-12T13:15:00-0500",
+            "ledger": [
+                {
+                    "client_key": "name:anthony-williams",
+                    "client_name": "Anthony Williams",
+                    "next_touch_status": "owner-review-before-message",
+                    "phase": "onboarding",
+                    "priority_score": "165",
+                    "flags": "onboarding_incomplete",
+                }
+            ],
+            "blockers": [],
+        }
+
+        with (
+            mock.patch.object(command_center, "load_owner_decisions", return_value={"anthony williams": {"owner_decision": "approved"}}),
+            mock.patch.object(command_center, "load_queue_suppressions", return_value={}),
+            mock.patch.object(command_center, "failed_rollout_clients", return_value={}),
+            mock.patch.object(command_center, "app_recovery_proofs", return_value={"anthony williams": "proof.md"}),
+            mock.patch.object(command_center, "highlevel_reply_work_queue_rows", return_value=[]),
+        ):
+            rows = command_center.build_work_queue(report)
+
+        self.assertEqual(rows[0]["queue_status"], "Done")
+        self.assertEqual(rows[0]["proof"], "proof.md")
+        self.assertEqual(rows[0]["evidence"], "proof.md")
+        self.assertIn("app_access_proof_captured", rows[0]["safe_fix_applied"])
 
     def test_queue_suppression_overrides_failed_row_without_deleting_evidence(self) -> None:
         report = {

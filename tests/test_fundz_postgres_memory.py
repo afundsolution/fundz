@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import sys
 
@@ -15,6 +16,35 @@ import fundz_postgres_memory as pgmem
 
 
 class FundzPostgresMemoryTests(unittest.TestCase):
+    def test_database_url_source_uses_first_configured_url(self) -> None:
+        with patch.dict(
+            pgmem.os.environ,
+            {
+                "FUNDZ_MEMORY_DATABASE_URL": "",
+                "SUPABASE_DB_URL": "postgresql://example.supabase/postgres",
+                "DATABASE_URL": "postgresql://fallback/postgres",
+                "NEON_DATABASE_URL": "",
+            },
+            clear=False,
+        ):
+            self.assertEqual(
+                pgmem.database_url_source(),
+                ("SUPABASE_DB_URL", "postgresql://example.supabase/postgres"),
+            )
+
+    def test_database_url_source_reports_missing_url(self) -> None:
+        with patch.dict(
+            pgmem.os.environ,
+            {
+                "FUNDZ_MEMORY_DATABASE_URL": "",
+                "SUPABASE_DB_URL": "",
+                "DATABASE_URL": "",
+                "NEON_DATABASE_URL": "",
+            },
+            clear=False,
+        ):
+            self.assertEqual(pgmem.database_url_source(), ("", ""))
+
     def test_sql_literal_escapes_quotes(self) -> None:
         self.assertEqual(pgmem.sql_literal("Brandon's client"), "'Brandon''s client'")
 

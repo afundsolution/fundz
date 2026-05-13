@@ -196,7 +196,7 @@ Can I get an update on Dedrick?"""
         self.assertEqual(processed["processed_keys"], [])
 
     def test_build_reply_uses_daily_board_local_tool(self) -> None:
-        board = "# FUNDz Daily Board\n\nGenerated: now\n\nToday’s Objective: Stay focused.\nNext Action: Use local tools.\nBlocked: none.\nNeeds Brandon: nothing.\nProof Required: receipt.\n"
+        board = "# A FUND Solution Daily Board\n\nGenerated: now\n\nToday’s Objective: Stay focused.\nNext Action: Use local tools.\nBlocked: none.\nNeeds Brandon: nothing.\nProof Required: receipt.\n"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             board_path = root / "data" / "local" / "command-center" / "fundz-daily-board.md"

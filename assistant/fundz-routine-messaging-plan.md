@@ -87,6 +87,16 @@ To avoid repetitive messages, rotate the purpose of each touch:
 
 FUNDz should not send two messages in a row with the same wording unless the owner explicitly approves it.
 
+## Personal Phone Spillover
+
+If an existing member texts Brandon's personal line, personal phone remains intake only. Do not train the member to keep using that line. After confirming the person is an existing member and the approved company response channel is available, redirect them to the Credit Tracker app using `assistant/personal-phone-redirect-sop.md`.
+
+Default redirect:
+
+```text
+Hi {first_name}, for anything related to your A FUND Solution file, please message us through your Credit Tracker app. That keeps your updates, questions, and next steps in the right place so the team can track everything clearly.
+```
+
 ## Starter Message Sequence
 
 ### Credit Tracker / App Message 1

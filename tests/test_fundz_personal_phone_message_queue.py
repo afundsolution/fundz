@@ -82,6 +82,9 @@ class PersonalPhoneMessageQueueTests(unittest.TestCase):
                     messages_db=db_path,
                     output=tmp_path / "queue.csv",
                     summary=tmp_path / "summary.md",
+                    triage=tmp_path / "triage.csv",
+                    triage_md=tmp_path / "triage.md",
+                    candidates=tmp_path / "candidates.csv",
                     keywords=["credit", "report", "round"],
                     max_messages=10,
                 )
@@ -105,6 +108,9 @@ class PersonalPhoneMessageQueueTests(unittest.TestCase):
                     messages_db=db_path,
                     output=output,
                     summary=tmp_path / "summary.md",
+                    triage=tmp_path / "triage.csv",
+                    triage_md=tmp_path / "triage.md",
+                    candidates=tmp_path / "candidates.csv",
                     keywords=["credit", "report"],
                     max_messages=10,
                 )
@@ -131,6 +137,9 @@ class PersonalPhoneMessageQueueTests(unittest.TestCase):
                     messages_db=db_path,
                     output=tmp_path / "queue.csv",
                     summary=tmp_path / "summary.md",
+                    triage=tmp_path / "triage.csv",
+                    triage_md=tmp_path / "triage.md",
+                    candidates=tmp_path / "candidates.csv",
                     keywords=["score"],
                     max_messages=10,
                 )
@@ -153,12 +162,75 @@ class PersonalPhoneMessageQueueTests(unittest.TestCase):
                     messages_db=db_path,
                     output=tmp_path / "queue.csv",
                     summary=tmp_path / "summary.md",
+                    triage=tmp_path / "triage.csv",
+                    triage_md=tmp_path / "triage.md",
+                    candidates=tmp_path / "candidates.csv",
                     keywords=["app"],
                     max_messages=10,
                 )
 
             self.assertFalse(any(row["phone"] == "22000" for row in rows))
             self.assertNotIn("verification code", "\n".join(row["last_message"] for row in rows).lower())
+
+    def test_owner_number_is_not_client_needs_reply(self) -> None:
+        row = {
+            "contact": "Brandon Jordan",
+            "phone": "+13466429919",
+            "last_message": "FUNDz status",
+            "date": "2026-05-12T12:00:00-05:00",
+            "direction": "inbound",
+            "needs_reply": "no",
+            "owner": "Brandon",
+            "status": "Owner Review",
+            "source": "Mac Messages chat.db | client_phone;owner_command_source",
+        }
+
+        triage = queue.triage_rows([row])
+
+        self.assertEqual(triage[0]["classification"], "owner-command/private intake")
+        self.assertEqual(triage[0]["move_to_work_queue"], "no")
+        self.assertEqual(triage[0]["needs_brandon_decision"], "no")
+
+    def test_travis_triage_generates_approval_candidate(self) -> None:
+        row = {
+            "contact": "Travis Vance",
+            "phone": "+15042151873",
+            "last_message": "Sensitive short message",
+            "date": "2026-03-15T16:58:26-05:00",
+            "direction": "inbound",
+            "needs_reply": "yes",
+            "owner": "Brandon",
+            "status": "Needs Reply",
+            "source": "Mac Messages chat.db | client_phone",
+        }
+
+        triage = queue.triage_rows([row])
+        candidates = queue.candidate_rows_from_triage(triage, "2026-05-12T12:00:00-05:00")
+
+        self.assertEqual(triage[0]["needs_brandon_decision"], "yes")
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["client_name"], "Travis Vance")
+        self.assertIn("sensitive_content", candidates[0]["flags"])
+
+    def test_no_company_action_contact_is_closed(self) -> None:
+        row = {
+            "contact": "Travis Vance",
+            "phone": "+15042151873",
+            "last_message": "Sensitive short message",
+            "date": "2026-03-15T16:58:26-05:00",
+            "direction": "inbound",
+            "needs_reply": "yes",
+            "owner": "Brandon",
+            "status": "Needs Reply",
+            "source": "Mac Messages chat.db | client_phone",
+        }
+
+        triage = queue.triage_rows([row], {"travis vance"})
+        candidates = queue.candidate_rows_from_triage(triage, "2026-05-12T12:00:00-05:00")
+
+        self.assertEqual(triage[0]["classification"], "personal/no-company-action")
+        self.assertEqual(triage[0]["needs_brandon_decision"], "no")
+        self.assertEqual(candidates, [])
 
 
 if __name__ == "__main__":

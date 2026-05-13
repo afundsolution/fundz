@@ -33,6 +33,10 @@ https://drive.google.com/drive/folders/1j0-0KNlgoSD_7j6FB_un4ZOKQfVl-BLP
 
 Purpose: track detailed work orders with client activity, system source, action summary, operational status, next step, owner, due date, and evidence. Treat the tracker as the shared source of truth for what still needs review or follow-up.
 
+Jay and Lucy's daily closeout SOP is `assistant/jay-lucy-daily-workorder-sop.md`. Use it as the operator script for `/workorder` expectations, required fields, privacy rules, escalation format, and the done standard.
+
+The A FUND Solution billing maintenance SOP for Lucy is `assistant/lucy-billing-maintenance-sop.md`. When `data/local/maintenance-cleanup/fundz-lucy-billing-workqueue.md` has rows, GOVERNOR should treat Lucy as the owner and require a proof-backed decision before the item leaves `needs_review` or `waiting`.
+
 Tabs:
 
 - `Work Orders`: main reviewed work-order table for LOGIC, FUNDz, and GOVERNOR.
@@ -107,7 +111,7 @@ GOVERNOR should act immediately on safe operating gaps. These actions do not nee
 - Mark unresolved dependencies as `Blocked`.
 - Add missing owner, due date, next step, and evidence-needed notes.
 - Link duplicate queue rows without deleting evidence.
-- Regenerate command-center reports and daily boards.
+- Regenerate A FUND Solution Command Center reports and daily boards from the appropriate source workspace.
 - Create escalation alerts when rollout, inbox, app SMS, billing, stale-work, or proof issues appear.
 - Pause a queue item from moving forward by setting it to `Blocked` when required proof, approval, or safety gates are missing.
 
@@ -134,7 +138,7 @@ Needs Brandon:
 Proof Required:
 ```
 
-If the board is missing or stale, regenerate the FUNDz command center and mark the stale queue item with a Governor alert.
+If the board is missing or stale, regenerate the A FUND Solution Command Center from the FUNDz workspace and mark the stale queue item with a Governor alert.
 
 ## Definition of Done
 

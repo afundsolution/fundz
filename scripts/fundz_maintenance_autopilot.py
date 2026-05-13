@@ -24,6 +24,10 @@ AUTOPILOT_LOG = OUTPUT_DIR / "fundz-maintenance-autopilot.jsonl"
 ROLLOUT_PACKET_JSON = ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-rollout-packet.json"
 MAINTENANCE_SUMMARY_JSON = OUTPUT_DIR / "fundz-maintenance-cleanup-summary.json"
 DAILY_BOARD_MD = ROOT / "data" / "local" / "command-center" / "fundz-daily-board.md"
+DATE_SENSITIVE_BILLING_REVIEW_MD = OUTPUT_DIR / "fundz-date-sensitive-billing-review-clearance.md"
+DATE_SENSITIVE_BILLING_REVIEW_CSV = OUTPUT_DIR / "fundz-date-sensitive-billing-review-clearance.csv"
+LUCY_BILLING_WORKQUEUE_MD = OUTPUT_DIR / "fundz-lucy-billing-workqueue.md"
+LUCY_BILLING_WORKQUEUE_CSV = OUTPUT_DIR / "fundz-lucy-billing-workqueue.csv"
 
 
 PIPELINE_STEPS = (
@@ -31,6 +35,8 @@ PIPELINE_STEPS = (
     ("live_hold_cleanup", ("scripts/fundz_live_hold_cleanup_packet.py",)),
     ("billing_risk_cleanup", ("scripts/fundz_billing_risk_cleanup_packet.py",)),
     ("maintenance_cleanup_board", ("scripts/fundz_maintenance_cleanup_board.py",)),
+    ("date_sensitive_billing_review", ("scripts/fundz_date_sensitive_billing_review.py", "--today", "{today}")),
+    ("lucy_billing_workqueue", ("scripts/fundz_lucy_billing_workqueue.py",)),
     ("rollout_safety_check", ("scripts/fundz_autofox_rollout_packet.py", "--size", "1", "--scan-limit", "1000")),
     ("command_center", ("scripts/fundz_command_center.py",)),
 )
@@ -107,6 +113,9 @@ def write_status(status: dict[str, Any]) -> None:
         "## Maintenance Counts",
         f"- Billing source rows: {summary.get('billing_source_rows', 0)}",
         f"- Unique billing clients: {summary.get('billing_unique_clients', 0)}",
+        f"- Active billing issue clients: {summary.get('active_billing_issue_clients', 0)}",
+        f"- Non-active/stale/not-found billing clients excluded: {summary.get('non_active_billing_clients', 0)}",
+        f"- Owner-updated billing clients removed from issue side: {summary.get('owner_updated_billing_clients', 0)}",
         f"- Archived/excluded clients: {summary.get('archived_excluded_clients', 0)}",
         f"- Bounced contact routes: {summary.get('bounced_contact_routes', 0)}",
         f"- Duplicate-review clients: {summary.get('duplicate_review_clients', 0)}",
@@ -124,10 +133,16 @@ def write_status(status: dict[str, Any]) -> None:
     lines.extend(
         [
             "",
-            "## Outputs",
-            f"- Maintenance board: {summary.get('board', 'missing')}",
-            f"- Duplicate review: {summary.get('duplicate_csv', 'missing')}",
-            f"- Daily board: {relative_label(DAILY_BOARD_MD)}",
+        "## Outputs",
+        f"- Maintenance board: {summary.get('board', 'missing')}",
+        f"- Active billing issues: {summary.get('active_billing_issues_csv', 'missing')}",
+        f"- Date-sensitive billing review: {relative_label(DATE_SENSITIVE_BILLING_REVIEW_MD)}",
+        f"- Date-sensitive billing review CSV: {relative_label(DATE_SENSITIVE_BILLING_REVIEW_CSV)}",
+        f"- Lucy billing work queue: {relative_label(LUCY_BILLING_WORKQUEUE_MD)}",
+        f"- Lucy billing work queue CSV: {relative_label(LUCY_BILLING_WORKQUEUE_CSV)}",
+        f"- Non-active billing review: {summary.get('non_active_billing_csv', 'missing')}",
+        f"- Duplicate review: {summary.get('duplicate_csv', 'missing')}",
+        f"- Daily board: {relative_label(DAILY_BOARD_MD)}",
         ]
     )
     STATUS_MD.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")

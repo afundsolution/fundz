@@ -27,13 +27,13 @@ Production/user data should live in a managed database with automated backups an
 - `fundz_memory_events`
 - `fundz_active_client_memory`
 
-To apply the schema and sync the current local operational state to Supabase or another Postgres database:
+To apply the schema and sync the current local operational state to Supabase or another Postgres database from the command line:
 
 ```sh
-scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state
+make supabase-memory-sync
 ```
 
-Set one of these in `.env.local` first:
+Set one of these in `.env.local` first. The value must be a real Postgres connection string, not a Supabase API URL or API key:
 
 - `FUNDZ_MEMORY_DATABASE_URL`
 - `SUPABASE_DB_URL`
@@ -49,7 +49,7 @@ scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state --print
 If `psql` access is blocked because the database password is unavailable, generate Supabase SQL editor chunks instead:
 
 ```sh
-scripts/fundz_postgres_memory.py --sync-operational-state --write-dashboard-chunks data/local/supabase-dashboard-sync
+make supabase-dashboard-sql
 ```
 
 Run the chunk files in order in the Supabase SQL editor. The final `*-verify.sql` chunk checks total client rows, active client rows, active-view rows, and the dashboard sync marker.

@@ -35,6 +35,10 @@ RISKY_REPLY_PATTERNS = (
     re.compile(r"\bscore increase\b", re.I),
     re.compile(r"\bresults? (?:are|is) guaranteed\b", re.I),
     re.compile(r"\bwe (?:will|can) fix\b", re.I),
+    re.compile(r"\b(?:funding|loan|credit)\s+(?:is\s+)?(?:approved|guaranteed)\b", re.I),
+    re.compile(r"\bpre[-\s]?approved\b", re.I),
+    re.compile(r"\bguaranteed\s+(?:bureau|credit|dispute|legal)\s+(?:result|outcome|win)\b", re.I),
+    re.compile(r"\b(?:we|fundz)\s+(?:will|can)\s+(?:get|make)\s+.*\b(?:approved|funded|deleted|removed)\b", re.I),
 )
 
 SENSITIVE_KEY_RE = re.compile(

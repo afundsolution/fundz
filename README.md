@@ -75,11 +75,13 @@ This combines the active-client export, dispute deleted/repaired report, email r
 
 The JSON file is the machine-readable client brain. The CSV is the quick review sheet with status, next import, current round, dispute counts, send counts, flags, and the recommended next action. The index is the ready-to-search name list FUNDz should check before ever saying a client record is unavailable. These outputs stay local and are ignored by Git.
 
-To sync that client brain into live Supabase/Postgres memory, set `FUNDZ_MEMORY_DATABASE_URL` or `SUPABASE_DB_URL` in `.env.local`, then run:
+To sync that client brain into live Supabase/Postgres memory from the command line, set a real pooled or direct Postgres connection string in `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` or `SUPABASE_DB_URL`, then run:
 
 ```sh
-scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state
+make supabase-memory-sync
 ```
+
+This requires `psql` and a real database URL. Do not use the Supabase project API URL or anon/service API key here; those are not Postgres connection strings.
 
 For a no-write review of the exact SQL:
 
@@ -90,7 +92,7 @@ scripts/fundz_postgres_memory.py --apply-schema --sync-operational-state --print
 If a direct Postgres password/connection string is not available, generate small SQL chunks for the Supabase dashboard SQL editor:
 
 ```sh
-scripts/fundz_postgres_memory.py --sync-operational-state --write-dashboard-chunks data/local/supabase-dashboard-sync
+make supabase-dashboard-sql
 ```
 
 Run the chunk files in order, then run the final `*-verify.sql` chunk and confirm the total/active counts match the local summary.
@@ -373,6 +375,8 @@ make webhook-probe
 ### HighLevel Inbox Fallback
 
 If Cloudflare or the Credit Tracker webhook is not stable, FUNDz can poll HighLevel conversations directly. This lets inbound client texts reach FUNDz without a public tunnel.
+
+FUNDz treats Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and HighLevel app/portal conversation rows as customer-service intake. Local intake can classify and remember those messages without sending a live reply. Live replies remain approval-gated and should not be enabled until the current app/portal route is reverified with a test-only webhook or a fresh HighLevel conversation snapshot.
 
 Preview mode, no sends:
 

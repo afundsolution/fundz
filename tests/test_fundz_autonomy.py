@@ -129,6 +129,17 @@ class FundzAutonomyTests(unittest.TestCase):
         payload["phone"] = "bad"
         self.assertEqual(bridge.should_auto_reply(payload), (False, "missing valid SMS-capable phone number"))
 
+    def test_bridge_accepts_credit_tracker_app_message_without_sms_phone(self) -> None:
+        os.environ["CREDIT_TRACKER_REQUIRE_CHANNEL"] = "true"
+        payload = self.valid_payload()
+        payload["channel"] = "Credit Tracker portal"
+        payload["messageType"] = "App Message"
+        payload["phone"] = ""
+        payload["message"] = "Can I get an update in the Credit Tracker app?"
+
+        self.assertEqual(bridge.outbound_message_type(payload), "App_Message")
+        self.assertEqual(bridge.should_auto_reply(payload), (True, "ready"))
+
     def test_valid_dry_run_reply_does_not_send_live(self) -> None:
         os.environ["CREDIT_TRACKER_DRY_RUN"] = "true"
         os.environ["CREDIT_TRACKER_REQUIRE_CHANNEL"] = "false"
@@ -358,6 +369,8 @@ class FundzAutonomyTests(unittest.TestCase):
     def test_risky_language_and_proposal_generation(self) -> None:
         hits = autonomy.risky_language_hits("We guarantee a deletion and score increase.")
         self.assertIn("guarantee", hits)
+        self.assertIn("funding is guaranteed", autonomy.risky_language_hits("Funding is guaranteed after this round."))
+        self.assertIn("pre-approved", autonomy.risky_language_hits("You are pre-approved."))
 
         proposal = autonomy.write_proposal(
             "Repeated bridge failures need review",

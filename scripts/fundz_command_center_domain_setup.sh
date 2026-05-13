@@ -83,7 +83,7 @@ import json
 from pathlib import Path
 path = Path("data/local/command-center/fundz-command-center-domain.json")
 data = json.loads(path.read_text(encoding="utf-8"))
-print("FUNDz Command Center domain is ready.")
+print("A FUND Solution Command Center domain is ready.")
 print("Owner URL: stored locally in data/local/command-center/fundz-command-center-domain.json")
 print(f"Local URL: {data.get('local_url')}")
 print("Token: stored locally and not printed")
