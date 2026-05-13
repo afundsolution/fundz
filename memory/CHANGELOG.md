@@ -2,6 +2,17 @@
 
 ## 2026-05-13
 
+### Agent A AutoFox Tip 04 Executor/Preflight
+
+- Inspected the sleep-mode gate, current memory handoff/status/next steps, Tip 04 packet, prior Tip 01-03 proof receipts, command-center generator, and focused tests.
+- Confirmed the exact safe live action remains Tip 04 only: create `Step 9 - Credit Tip 04 - Statement Dates (24 Days)` in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`) with `Delay / Days / 24`, Mobile App SMS action `Credit Tip 04 - Statement Dates Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 04 Step 9`.
+- Added local operator preflight/checklist `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-operator-preflight-20260513.md`; it includes the pre-live checklist, exact Mobile App SMS copy, exact internal note marker, and final proof receipt template.
+- Updated `scripts/fundz_command_center.py` so the generated `fundz-autofox-member-experience-system.md` points to the operator preflight/checklist, and added a focused test assertion.
+- Regenerated `make command-center`.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 56 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No browser was opened, no DF/Pulse edit was performed, no campaign was assigned, no manual client send happened, no broad `Update Data Fields` action was used, and no Tip 05+ expansion happened.
+- Blocker: live execution still requires Brandon's exact action-time approval plus an available logged-in DF/Pulse browser.
+
 ### Agent 3 Billing / Revenue Proof Map
 
 - Reviewed the Lucy-owned billing workqueue, decision batch, billing maintenance focus, owner billing status updates, payment-proof ledger, send ledger, archive receipt trail, and May 12 ScoreFusion billing reminder receipt.

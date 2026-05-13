@@ -3257,6 +3257,7 @@ def write_member_experience_system(
             "- Step timing: `Start = Delay`, `Interval Type = Days`, `Interval Value = 24`",
             "- Mobile App SMS action: `Credit Tip 04 - Statement Dates Mobile App SMS`",
             "- Internal note marker title: `FUNDz marker - Credit Tip 04 Step 9`",
+            "- Operator preflight/checklist: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-operator-preflight-20260513.md`",
             "- Receipt target: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md` plus screenshot",
             "",
             "Mobile App SMS body:",

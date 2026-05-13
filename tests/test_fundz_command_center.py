@@ -387,6 +387,7 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("Step 9 - Credit Tip 04 - Statement Dates (24 Days)", text)
             self.assertIn("Interval Value = 24", text)
             self.assertIn("FUNDz marker - Credit Tip 04 Step 9", text)
+            self.assertIn("autofox-credit-tip-04-step9-operator-preflight-20260513.md", text)
             self.assertIn("No manual client send or campaign assignment was performed", text)
             self.assertIn("Credit Tip 20 - Long-Term Habits", text)
             self.assertIn("Owner Review - App SMS Failed", text)
