@@ -61,6 +61,26 @@
 - Current conclusion: client-side app proof exists, but system-side capture is still missing. Next proof surface is DF/Credit Tracker `Messages` / `Communications Center` / `All Messages` on `secure.disputeprocess.com`.
 - No live reply, send, campaign assignment, DF/AutoFox edit, billing edit, webhook wiring, or Supabase write was performed.
 
+### App/Portal Proof Diagnostic Path
+
+- Added no-send app/portal event receipts to `scripts/fundz_highlevel_inbox_poller.py`.
+- The HighLevel poller and manual inbox workaround now write `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` and `data/local/highlevel-inbox-poller/app-portal-event-proof.md` when they observe Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, App Message, or app-access signals.
+- The proof receipt is written before the normal handling gate, so an app/portal row can be evidenced even if it is not safe to process because it is missing a contact ID or otherwise blocked.
+- Documented the new proof files in `README.md`.
+- Added focused tests for app/portal proof capture from both API-normalized payloads and manual HighLevel inbox imports.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 19 tests OK, and `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed.
+- No live reply, send, campaign assignment, DF/AutoFox edit, billing edit, browser action, webhook wiring, or Supabase write was performed.
+
+### Brandon Owner-Side App/Portal Roundtrip Proof
+
+- Cleared the DF login-conflict blocker by using `secure.disputeprocess.com` and opening Brandon Jordan's profile.
+- Confirmed the fresh inbound app message in DF admin `Messages` -> `Communications Center` -> `All Messages`: `App Message`, `hey`, `31 Minute ago`, `Created by Brandon Jordan`, `Read`.
+- Sent one approved owner-side portal proof reply from Brandon's own profile: title `FUNDz portal proof reply`; body `Received. This is the FUNDz app portal proof reply test.`
+- Confirmed DF `Portal Messages` recorded the sent row as `FUNDz portal proof reply`, `Just now`, `Brandon Jordan`, `Sent`.
+- Opened the Brandon client portal read-only and confirmed `Messages` showed the reply as `FROM: DISPUTE TEAM [NEW] 2 MINUTE AGO` with title `FUNDz portal proof reply`.
+- Added receipts: `data/local/semi-autonomous/receipts/brandon-jordan-df-all-messages-app-message-hey-proof-20260513.md`, `data/local/semi-autonomous/receipts/brandon-jordan-df-portal-reply-proof-20260513.md`, and `data/local/semi-autonomous/receipts/brandon-jordan-client-portal-reply-visibility-proof-20260513.md`.
+- This closes the Brandon owner-side app/portal roundtrip proof path only. No third-party client reply, campaign assignment, DF/AutoFox edit, billing edit, webhook wiring, Supabase write, or broad live customer-service rollout was performed.
+
 ## 2026-05-12
 
 ### Anthony Williams DF App Proof Closeout
