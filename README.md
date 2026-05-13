@@ -3,8 +3,10 @@
 ## Status: Safe Local Autonomy / Sleep Mode
 
 FUNDz is currently parked from live client operations: fun, locally autonomous,
-inactive for client sends, and not sending clients. Brandon explicitly woke the
-local autonomous-operator and iMessage fallback LaunchAgents on May 8, 2026.
+inactive for client sends, and not sending clients. The local autonomous
+operator is enabled for weekly dry-run safety checks; the iMessage fallback
+LaunchAgent is currently parked/disabled unless Brandon confirms he wants
+owner-command fallback awake again.
 Start with `FUNDZ_SLEEP_MODE.md` before doing any operational work. Use
 `make autonomous` for safe local board/intake/maintenance refreshes, and use
 `make inactive` to stop the local bridge, tunnel, poller, and iMessage fallback
@@ -412,6 +414,7 @@ App/portal proof receipts are also written locally when the poller or manual wor
 - `data/local/highlevel-inbox-poller/app-portal-event-proof.md`
 
 These files are proof-only. They do not send replies or edit HighLevel, DF, AutoFox, billing, or campaigns.
+For the cleanest manual app/portal proof, include export columns such as `lastMessageType`, `channel`, `source`, `contact_id`, `conversation_id`, `date`, and `last message`. Plain SMS rows are not treated as app/portal proof unless the channel/source or message text clearly identifies the Credit Tracker app, portal, App Message, or Mobile App SMS.
 
 To diagnose a real webhook payload before enabling live sends:
 

@@ -383,6 +383,11 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("Round Updates", text)
             self.assertIn("Education / Credit Tips", text)
             self.assertIn("Problem / Owner Review", text)
+            self.assertIn("Next Controlled Tip 04 Review Packet", text)
+            self.assertIn("Step 9 - Credit Tip 04 - Statement Dates (24 Days)", text)
+            self.assertIn("Interval Value = 24", text)
+            self.assertIn("FUNDz marker - Credit Tip 04 Step 9", text)
+            self.assertIn("No manual client send or campaign assignment was performed", text)
             self.assertIn("Credit Tip 20 - Long-Term Habits", text)
             self.assertIn("Owner Review - App SMS Failed", text)
             self.assertEqual(len(tip_rows), 20)
@@ -1448,7 +1453,12 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "generated_at": "2026-05-08T12:00:00-0500",
                 "summary": {"active_clients": 2, "owner_review_before_message": 1, "action_counts": {}},
                 "daily_board": [],
-                "work_queue": [],
+                "work_queue": [
+                    {"queue_status": "Approved"},
+                    {"queue_status": "Needs Brandon"},
+                    {"queue_status": "Done"},
+                    {"queue_status": "Proof Needed"},
+                ],
                 "communication_control_board": [],
                 "governor_alerts": [],
                 "blockers": [],
@@ -1460,6 +1470,9 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("## Operating Map", text)
             self.assertIn("A FUND Solution has one Command Center", text)
             self.assertIn("Message receipts and gates", text)
+            self.assertIn("## Queue Truth", text)
+            self.assertIn("Approved: 1 prepared-but-gated row(s)", text)
+            self.assertIn("Done/Sent: 1 receipt-backed outcome(s)", text)
 
     def test_daily_board_outputs_exactly_five_lines(self) -> None:
         report = {

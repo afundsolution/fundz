@@ -8,7 +8,7 @@ Status: FUN, AUTONOMOUS LOCALLY, AND NOT SENDING CLIENTS.
       |  FUNDz is awake locally.       |
       |  Lights: cozy.                 |
       |  Client sends: off.            |
-      |  Owner commands: awake.        |
+      |  Owner commands: parked.       |
       |  Next live move: on purpose.   |
        \______________________________/
 ```
@@ -16,7 +16,8 @@ Status: FUN, AUTONOMOUS LOCALLY, AND NOT SENDING CLIENTS.
 ## What Inactive Means
 
 - Do not send client messages, assign campaigns, wire webhooks, edit DF/HighLevel/Credit Tracker records, or open operational browser sessions unless Brandon explicitly asks to wake that exact live step.
-- Brandon explicitly requested the local autonomous operator and FUNDz iMessage fallback LaunchAgents enabled on May 8, 2026. Keep `fundz-bridge`, `fundz-tunnel`, and `fundz-highlevel-poller` stopped unless named.
+- The local autonomous operator may stay enabled for weekly dry-run safety checks. The FUNDz iMessage fallback LaunchAgent is currently parked/disabled; re-enable it only if Brandon confirms he wants owner-command fallback awake again.
+- Keep `fundz-bridge`, `fundz-tunnel`, and `fundz-highlevel-poller` stopped unless named.
 - Local reporting, reading, memory review, and the safe autonomous operator are fine, but keep them read-only and dry-run by default.
 - `make autonomous` may refresh local boards, intake, cleanup, proposals, and tests while FUNDz is asleep. It must not start live runtime pieces or send client messages.
 - The first file for the next agent is still `memory/HANDOFF.md`; this sleep-mode note is the big friendly sign on the door.

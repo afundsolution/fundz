@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -87,6 +88,14 @@ APP_PORTAL_SIGNAL_TERMS = {
 }
 
 
+def text_matches_pattern(text: str, pattern: str) -> bool:
+    if not pattern:
+        return False
+    if pattern == "?":
+        return "?" in text
+    return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(pattern.lower())}(?![A-Za-z0-9])", text.lower()))
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -138,7 +147,7 @@ def classify_inbound_reply(text: str) -> dict[str, Any]:
     labels = [
         label
         for label, patterns in REPLY_CLASS_PATTERNS.items()
-        if any(pattern in lower for pattern in patterns)
+        if any(text_matches_pattern(lower, pattern) for pattern in patterns)
     ]
     if not labels:
         labels = ["no_action"]
@@ -280,7 +289,7 @@ def app_portal_signals(payload: dict[str, Any]) -> list[str]:
         payload.get("source_file"),
     ]
     haystack = " ".join(str(value or "") for value in values).lower()
-    return sorted(term for term in APP_PORTAL_SIGNAL_TERMS if term in haystack)
+    return sorted(term for term in APP_PORTAL_SIGNAL_TERMS if text_matches_pattern(haystack, term))
 
 
 def is_app_portal_payload(payload: dict[str, Any], classification: dict[str, Any] | None = None) -> bool:

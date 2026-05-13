@@ -3179,8 +3179,9 @@ def write_autofox_migration_checklist(report: dict[str, Any], path: Path = AUTOF
         "- Client (step 04) - Round 1 Sent & Campaign: Credit Tip 01, 02, and 03 delayed steps have saved Mobile App SMS actions and internal note markers.",
         "",
         "## Still Needs Review",
+        "- Next controlled credit-tip target: Credit Tip 04 only in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`). Create Step 9 as `Credit Tip 04 - Statement Dates (24 Days)` with Delay / Days / 24, add `Credit Tip 04 - Statement Dates Mobile App SMS`, add `FUNDz marker - Credit Tip 04 Step 9`, and save screenshot/receipt proof.",
+        "- After Tip 04 is proven, Credit Tip 05 through Credit Tip 20 still need DF delayed Mobile App SMS actions saved one controlled step at a time.",
         "- Round 5 through Round 10 score-update campaigns need DF proof before relying on Mobile App SMS coverage.",
-        "- Credit Tip 04 through Credit Tip 20 still need DF delayed Mobile App SMS actions saved at 3 and 10 days after each round sent.",
         "- Problem/Owner Review internal task actions need DF proof for billing issue, app SMS failed, no app login, no import, no response, duplicate messaging, stale round, and high-touch confusion.",
         "- Any onboarding, reminder, reactivation, billing-warning, cancellation, or custom AutoFox sequence outside the verified list above.",
         "- Any old running workflow where retro-added Mobile App SMS actions remain In-Progress.",
@@ -3247,6 +3248,39 @@ def write_member_experience_system(
             "Implementation status: the DF delayed-step blocker is cleared for the controlled Round 1 template. Credit Tips 01, 02, and 03 are saved with Mobile App SMS actions and internal note markers in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).",
             "",
             "Next controlled target: Credit Tip 04 only. Use the same pattern: one delayed step, one Mobile App SMS action, one internal DF note marker, screenshot proof, and no campaign assignment or manual client send.",
+            "",
+            "## Next Controlled Tip 04 Review Packet",
+            "",
+            "- Workflow: `Client (step 04) - Round 1 Sent & Campaign`",
+            "- AutoFox ID: `160038`",
+            "- New step to create: `Step 9 - Credit Tip 04 - Statement Dates (24 Days)`",
+            "- Step timing: `Start = Delay`, `Interval Type = Days`, `Interval Value = 24`",
+            "- Mobile App SMS action: `Credit Tip 04 - Statement Dates Mobile App SMS`",
+            "- Internal note marker title: `FUNDz marker - Credit Tip 04 Step 9`",
+            "- Receipt target: `data/local/semi-autonomous/receipts/autofox-credit-tip-04-step9-mobile-sms-note-proof-20260513.md` plus screenshot",
+            "",
+            "Mobile App SMS body:",
+            "",
+            "```text",
+            "Credit Tip 4:",
+            "A card payment may not show in monitoring right away. Many cards report around the statement date.",
+            "",
+            "Quick action:",
+            "Give balance updates time to report before worrying.",
+            "```",
+            "",
+            "Internal note marker body:",
+            "",
+            "```text",
+            "FUNDz status marker: Round 1 AutoFox Step 9 is Credit Tip 04 - Statement Dates, delayed 24 days, with Mobile App SMS saved. Source workflow: Client (step 04) - Round 1 Sent & Campaign / autofox_id=160038. No manual client send or campaign assignment was performed in this setup pass.",
+            "```",
+            "",
+            "Review gates before live DF work:",
+            "",
+            "- Confirm Tips 01-03 are still visible with `Mobile App SMS` and `Note Created` rows.",
+            "- Do not use `Update Data Fields` unless a clearly dedicated safe marker field is visible.",
+            "- Do not assign the campaign, manually send a client message, remove regular SMS, or expand beyond Tip 04.",
+            "- After saving, verify the Step 9 row shows both `Mobile App SMS` and `Note Created`, then capture receipt notes/screenshots before moving to Tip 05.",
             "",
             "## Credit Tip Schedule",
             "| Tip | Round | Delay | Action name | Topic |",
@@ -4266,6 +4300,23 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
     )
     for status in QUEUE_STATUSES:
         lines.append(f"- {status}: {queue_counts.get(status, 0)}")
+    approved_count = queue_counts.get("Approved", 0)
+    done_count = queue_counts.get("Done", 0)
+    sent_count = queue_counts.get("Sent", 0)
+    needs_brandon_count = queue_counts.get("Needs Brandon", 0)
+    blocked_count = queue_counts.get("Blocked", 0)
+    failed_count = queue_counts.get("Failed", 0)
+    proof_needed_count = queue_counts.get("Proof Needed", 0)
+    lines.extend(
+        [
+            "",
+            "## Queue Truth",
+            f"- Done/Sent: {done_count + sent_count} receipt-backed outcome(s).",
+            f"- Approved: {approved_count} prepared-but-gated row(s); these are not complete until proof or an action receipt exists.",
+            f"- Needs Brandon: {needs_brandon_count} decision/hold row(s); do not send or mark done from these rows.",
+            f"- Blocked/Failed/Proof Needed: {blocked_count + failed_count + proof_needed_count} row(s) requiring blocker or proof cleanup before closeout.",
+        ]
+    )
     control_counts = Counter(str(row.get("communication_status") or "Unknown") for row in report.get("communication_control_board", []))
     lines.extend(["", "## Client Communication Control Board"])
     if control_counts:

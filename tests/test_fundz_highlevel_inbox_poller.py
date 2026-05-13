@@ -179,9 +179,30 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         classification = poller.classify_inbound_reply("My credit score dropped. What happened?")
 
         self.assertIn("score_concern", classification["labels"])
+        self.assertNotIn("app_access", classification["labels"])
         self.assertFalse(classification["needs_brandon_reply"])
         self.assertTrue(classification["needs_follow_up"])
         self.assertEqual(classification["recommended_response_mode"], "reassure_with_verified_facts")
+
+    def test_app_access_classifier_uses_whole_words(self):
+        happened = poller.classify_inbound_reply("What happened to my credit score?")
+        app_help = poller.classify_inbound_reply("I cannot log into the app.")
+
+        self.assertNotIn("app_access", happened["labels"])
+        self.assertIn("app_access", app_help["labels"])
+
+    def test_app_portal_signal_uses_whole_words(self):
+        regular_sms = {
+            "messageType": "SMS",
+            "source_file": "highlevel-happened-export.csv",
+        }
+        app_message = {
+            "messageType": "TYPE_APP_MESSAGE",
+            "source": "highlevel-poller",
+        }
+
+        self.assertEqual(poller.app_portal_signals(regular_sms), [])
+        self.assertIn("app_message", poller.app_portal_signals(app_message))
 
     def test_write_reply_queue_updates_customer_memory_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -313,6 +334,36 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         send_reply.assert_not_called()
         mark_seen.assert_called_once_with("msg-hold-1")
         self.assertTrue(any(call.args[0] == "reply_hold" for call in write_poll_log.call_args_list))
+
+    def test_live_hold_score_sms_does_not_write_app_portal_proof(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = {
+                "message_id": "msg-hold-1",
+                "contact_id": "contact-1",
+                "conversation_id": "conv-1",
+                "message": "My credit score dropped. What happened?",
+                "messageType": "SMS",
+                "phone": "+15555550123",
+            }
+
+            with (
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_JSONL", base / "app-proof.jsonl"),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_MD", base / "app-proof.md"),
+                mock.patch.object(poller, "REPLY_QUEUE", base / "classified.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_MEMORY", base / "customer-memory.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_SUMMARIES", base / "customer-summaries.json"),
+                mock.patch.object(poller, "has_seen", return_value=False),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "draft_bridge_reply", return_value="Safe local reply."),
+                mock.patch.object(poller, "send_reply"),
+                mock.patch.object(poller, "mark_seen"),
+            ):
+                result = poller.handle_payload(payload, live=True)
+
+        self.assertTrue(result["held"])
+        self.assertFalse((base / "app-proof.jsonl").exists())
 
     def test_successful_live_reply_writes_receipt(self):
         with tempfile.TemporaryDirectory() as tmp:

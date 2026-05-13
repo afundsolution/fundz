@@ -2,6 +2,58 @@
 
 ## 2026-05-13
 
+### Agent 3 Billing / Revenue Proof Map
+
+- Reviewed the Lucy-owned billing workqueue, decision batch, billing maintenance focus, owner billing status updates, payment-proof ledger, send ledger, archive receipt trail, and May 12 ScoreFusion billing reminder receipt.
+- Added `data/local/maintenance-cleanup/fundz-billing-revenue-proof-map-2026-05-13.md` and `.csv`.
+- Confirmed 16 Lucy rows, 16/16 local decisions complete, 7 duplicate-review clients collapsed to one client-level issue, and 7 Lucy rows with reminder-send proof that should not be reopened as unsent reminder work.
+- Confirmed 15 Lucy rows still need payment or billing-system clearance, Victoria Robinson still needs live DF archive preflight/receipt, and the payment-proof ledger has 0 receipt rows.
+- Verification passed: CSV validation showed 16 proof-map rows, 7 reminder-closed rows, 1 archive-gated row, and 0 payment-ledger data rows; `sh scripts/check-memory.sh` passed.
+- No reminder send, billing edit, DF/AutoFox archive/edit, campaign assignment, client reply, HighLevel live action, or Supabase write was performed.
+
+### Agent 4 Command-Center Truth Refresh
+
+- Regenerated local command-center outputs with `make command-center`.
+- Added a generated `Queue Truth` block to `data/local/command-center/fundz-command-center.md` through `scripts/fundz_command_center.py`.
+- The refreshed board now spells out that `Approved` is prepared but gated, not done; `Done/Sent` is receipt-backed; `Needs Brandon` is decision/hold; and `Blocked/Failed/Proof Needed` requires cleanup before closeout.
+- Current queue counts: 224 rows total; 141 Approved, 37 Needs Brandon, 45 Done, 1 Sent, 0 Hold, 0 Blocked, 0 Failed, 0 Proof Needed.
+- Current send gate: 0 next-send rows and 0 allowed now.
+- Current missing-steps recheck: 7 pass and 3 review; Supabase command-line sync is pass from local `.env.local` configuration.
+- Verification: `python3 -m unittest tests.test_fundz_command_center -q` passed 56 tests; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No live runtime, sends, browser actions, DF/AutoFox edits, HighLevel live actions, webhook wiring, billing edits, or Supabase writes were performed.
+
+### Agent 2 AutoFox Tip 04 Review Packet
+
+- Tightened the local AutoFox credit-tip planning surfaces only.
+- Added a generator-backed `Next Controlled Tip 04 Review Packet` to `data/local/command-center/fundz-autofox-member-experience-system.md`.
+- The packet now names the exact next controlled live step if Brandon approves DF work: `Step 9 - Credit Tip 04 - Statement Dates (24 Days)`, `Delay / Days / 24`, Mobile App SMS action `Credit Tip 04 - Statement Dates Mobile App SMS`, and internal note marker `FUNDz marker - Credit Tip 04 Step 9`.
+- Added the exact Tip 04 app message body, internal note marker body, receipt target, and no-send/no-assignment review gates.
+- Tightened `data/local/command-center/fundz-autofox-mobile-app-migration-checklist.md` so Tip 04 is the only next controlled target and Tips 05-20 remain future one-at-a-time work after Tip 04 proof.
+- Added focused command-center test assertions for the Tip 04 review packet.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q`, `python3 -m py_compile scripts/fundz_command_center.py`, and `make command-center`.
+- No browser was opened, no DF/Pulse edit was performed, no campaign was assigned, no client send happened, and no live action was taken.
+
+### Agent 5 Parking / Scheduler Safety Audit
+
+- Verified safe parking without waking live bridge, poller, webhook, browser, or client-send runtime.
+- Confirmed `screen -ls` shows only the local `fundz-command-center` reporting server, with no `fundz-bridge`, `fundz-tunnel`, or `fundz-highlevel-poller` sessions.
+- Confirmed `launchctl print-disabled gui/$(id -u)` shows `com.afundsolution.fundz-autonomous-operator` enabled and `com.afundsolution.fundz-imessage-fallback` disabled.
+- Confirmed the autonomous LaunchAgent is not running, has `StartInterval=604800`, `RunAtLoad=false`, and keeps `CREDIT_TRACKER_DRY_RUN=true`, `FUNDZ_HIGHLEVEL_POLLER_LIVE=false`, and `FUNDZ_ALLOW_AFTER_HOURS_SENDS=false`.
+- Confirmed the iMessage fallback service is unloaded/disabled even though its plist still exists.
+- Updated `FUNDZ_SLEEP_MODE.md`, `README.md`, and `memory/NEXT_STEPS.md` to remove stale "owner commands awake / keep fallback enabled" instructions; fallback should stay parked unless Brandon reconfirms.
+- Verification passed: dry runtime check with current safe-mode allowances returned no safety findings; `python3 -m unittest tests.test_fundz_autonomous_operator -q` passed 6 tests; `sh -n scripts/fundz_inactive.sh` passed; `sh scripts/check-memory.sh` passed; `make test` passed 230 tests.
+- No live client reply, client send, bridge wake, HighLevel live poller, DF/AutoFox edit, campaign assignment, webhook wiring, billing edit, or Supabase write was performed.
+
+### App/Portal Proof Mapping Hardening
+
+- Tightened `scripts/fundz_highlevel_inbox_poller.py` so app/portal proof matching uses whole-word/phrase checks instead of substring checks.
+- Fixed a false positive where a plain SMS score concern like `What happened?` could be classified as `app_access` and written to `data/local/highlevel-inbox-poller/app-portal-event-proof.*` because `app` appears inside `happened`.
+- Added focused tests for whole-word app-access classification, whole-word app/portal signal detection, and score-concern live holds not writing app/portal proof.
+- Updated `README.md` and `data/local/highlevel-inbox-manual-imports/_README.md` with recommended manual app/portal proof headers.
+- Cleaned the prior false local proof row from `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` and reset the readable proof summary to 0 captured events until a real app/portal row appears.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 22 tests OK, and `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed.
+- No live send, HighLevel live reply, DF/AutoFox edit, campaign assignment, billing edit, browser action, webhook wiring, or Supabase write was performed.
+
 ### Supabase Command-Line Sync Unblocked
 
 - Saved the validated Supabase Postgres connection string to local `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` without printing or committing the secret.
