@@ -32,6 +32,17 @@ PHONE_APP_INTAKE_CSV = OUTPUT_DIR / "fundz-phone-app-intake.csv"
 PHONE_APP_INTAKE_MD = OUTPUT_DIR / "fundz-phone-app-intake.md"
 PHONE_APP_REGISTRY_MD = OUTPUT_DIR / "fundz-phone-app-intake-registry.md"
 PHONE_APP_DASHBOARD_HTML = OUTPUT_DIR / "fundz-phone-app-intake-dashboard.html"
+PERSONAL_PHONE_REDIRECT_SOP = ROOT / "assistant" / "personal-phone-redirect-sop.md"
+
+EXISTING_MEMBER_REDIRECT_COPY = (
+    "Hi {first_name}, for anything related to your A FUND Solution file, please message us through your Credit Tracker app. "
+    "That keeps your updates, questions, and next steps in the right place so the team can track everything clearly."
+)
+
+APP_ACCESS_HELP_COPY = (
+    "Hi {first_name}, please use your Credit Tracker app for file questions and updates going forward. "
+    "If you cannot get into the app, reply through the company channel and we can help with access."
+)
 
 MONEY_KEYWORDS = {
     "payment",
@@ -332,13 +343,25 @@ def intake_from_personal_phone(path: Path | None = None) -> list[dict[str, Any]]
     for index, row in enumerate(read_csv_rows(path), start=1):
         inbound = row.get("direction") == "inbound"
         text = row.get("last_message", "")
+        owner_private = row.get("status") == "Owner Review" or "owner_command_source" in row.get("source", "")
         classification = classify_text(text, inbound=inbound)
         unknown_keyword_only = (
             inbound
             and row.get("contact") == "Unknown business keyword match"
             and "client_" not in row.get("source", "")
         )
-        if unknown_keyword_only and classification["status"] == "Needs Reply":
+        if owner_private:
+            classification = {
+                **classification,
+                "category": "Owner Command / Private",
+                "status": "Owner Review",
+                "next_step": "Handle through the owner-command/private intake path. Do not create a client Work Queue row from this message.",
+                "approval_needed": "no",
+                "shared_safe": "no",
+                "priority": 45,
+                "revenue_signal": "no",
+            }
+        elif unknown_keyword_only and classification["status"] == "Needs Reply":
             classification = {
                 **classification,
                 "status": "Review",
@@ -364,7 +387,7 @@ def intake_from_personal_phone(path: Path | None = None) -> list[dict[str, Any]]
                 "proof_required": classification["proof_required"],
                 "approval_needed": classification["approval_needed"],
                 "shared_safe": classification["shared_safe"],
-                "sanitized_summary": sanitize_summary(text),
+                "sanitized_summary": "Owner-number message kept private." if owner_private else sanitize_summary(text),
                 "evidence": evidence_path(path),
             }
         )
@@ -498,6 +521,12 @@ def build_phone_app_intake() -> dict[str, Any]:
         "summary": summarize(rows),
         "rows": rows,
         "registry": APP_REGISTRY,
+        "existing_member_redirect": {
+            "sop": evidence_path(PERSONAL_PHONE_REDIRECT_SOP),
+            "default_copy": EXISTING_MEMBER_REDIRECT_COPY,
+            "app_access_help_copy": APP_ACCESS_HELP_COPY,
+            "rule": "Existing members who text Brandon's personal line should be redirected to the Credit Tracker app through an approved company channel. Do not auto-reply from the personal line.",
+        },
         "import_folder": str(IMPORT_DIR),
         "rules": [
             "Do not ingest the whole phone.",
@@ -539,6 +568,29 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append("- No intake rows yet.")
     lines.extend(["", "## Approved App Registry", ""])
     lines.extend(build_registry_lines()[4:])
+    redirect = report["existing_member_redirect"]
+    lines.extend(
+        [
+            "",
+            "## Existing Member Redirect",
+            "",
+            redirect["rule"],
+            "",
+            "Default copy:",
+            "",
+            "```text",
+            redirect["default_copy"],
+            "```",
+            "",
+            "App access help copy:",
+            "",
+            "```text",
+            redirect["app_access_help_copy"],
+            "```",
+            "",
+            f"SOP: {redirect['sop']}",
+        ]
+    )
     lines.append("")
     return "\n".join(lines)
 
@@ -575,6 +627,7 @@ def render_dashboard(report: dict[str, Any]) -> str:
         f"<tr><td>{esc(item['app'])}</td><td>{esc(item['status'])}</td><td>{esc(item['money_use'])}</td><td>{esc(item['safety'])}</td></tr>"
         for item in APP_REGISTRY
     )
+    redirect = report["existing_member_redirect"]
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -597,6 +650,7 @@ def render_dashboard(report: dict[str, Any]) -> str:
     table {{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:13px; }}
     th,td {{ border-bottom:1px solid #d0d5dd; padding:9px 8px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }}
     th {{ background:#f9fafb; font-size:12px; color:#344054; }}
+    .copy {{ background:#f9fafb; border:1px solid #d0d5dd; border-radius:8px; padding:12px; color:#101828; font-size:14px; line-height:1.45; }}
     .flow {{ display:grid; grid-template-columns:repeat(5,minmax(130px,1fr)); gap:10px; }}
     .node {{ border:1px solid #d0d5dd; border-left:5px solid #175cd3; border-radius:8px; padding:12px; background:#fcfcfd; }}
     .node span {{ display:block; color:#667085; font-size:12px; margin-bottom:6px; }}
@@ -627,6 +681,14 @@ def render_dashboard(report: dict[str, Any]) -> str:
         <thead><tr><th>Priority</th><th>App</th><th>Category</th><th>Status</th><th>Contact</th><th>Summary</th><th>Next Step</th></tr></thead>
         <tbody>{row_html}</tbody>
       </table>
+    </section>
+    <section>
+      <h2>Existing Member Redirect</h2>
+      <p>{esc(redirect['rule'])}</p>
+      <div class="copy">{esc(redirect['default_copy'])}</div>
+      <p>App access help copy:</p>
+      <div class="copy">{esc(redirect['app_access_help_copy'])}</div>
+      <p>SOP: {esc(redirect['sop'])}</p>
     </section>
     <section>
       <h2>Approved App Registry</h2>

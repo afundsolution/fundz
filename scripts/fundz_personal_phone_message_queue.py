@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -26,6 +27,10 @@ OUTPUT_DIR = ROOT / "data" / "local" / "command-center"
 DEFAULT_MESSAGES_DB = Path.home() / "Library" / "Messages" / "chat.db"
 DEFAULT_OUTPUT = OUTPUT_DIR / "fundz-personal-phone-message-queue.csv"
 DEFAULT_SUMMARY = OUTPUT_DIR / "fundz-personal-phone-message-queue-summary.md"
+DEFAULT_TRIAGE = OUTPUT_DIR / "fundz-personal-phone-needs-reply-triage.csv"
+DEFAULT_TRIAGE_MD = OUTPUT_DIR / "fundz-personal-phone-needs-reply-triage.md"
+DEFAULT_CANDIDATES = OUTPUT_DIR / "fundz-personal-phone-work-queue-candidates.csv"
+DEFAULT_NO_COMPANY_ACTION = OUTPUT_DIR / "fundz-personal-phone-no-company-action.csv"
 
 BUSINESS_KEYWORDS = [
     "credit",
@@ -82,6 +87,44 @@ QUEUE_FIELDS = [
     "source",
 ]
 
+TRIAGE_FIELDS = [
+    "triage_id",
+    "contact",
+    "phone",
+    "date",
+    "classification",
+    "reply_needed",
+    "move_to_work_queue",
+    "needs_brandon_decision",
+    "sanitized_summary",
+    "recommended_action",
+    "source",
+]
+
+CANDIDATE_FIELDS = [
+    "work_order_id",
+    "created_at",
+    "actor",
+    "system",
+    "lane",
+    "queue_status",
+    "client_key",
+    "client_name",
+    "owner",
+    "due_date",
+    "next_step",
+    "proof_required",
+    "proof",
+    "evidence",
+    "priority_score",
+    "flags",
+    "browser_required",
+    "do_not_send_because",
+    "approval_needed",
+]
+
+DEFAULT_OWNER_PHONE_SUFFIXES = {"3466429919"}
+
 APPLE_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
 
 
@@ -112,6 +155,18 @@ def display_phone(value: str) -> str:
     return value or ""
 
 
+def owner_phone_suffixes() -> set[str]:
+    raw = os.environ.get("FUNDZ_OWNER_COMMAND_SENDERS", "")
+    configured = {normalize_phone(item)[-10:] for item in raw.split(",") if normalize_phone(item)}
+    return configured or DEFAULT_OWNER_PHONE_SUFFIXES
+
+
+def is_owner_contact(contact: str, phone: str) -> bool:
+    normalized_contact = normalize_name(contact)
+    normalized_phone = normalize_phone(phone)[-10:]
+    return normalized_contact == "brandon jordan" or normalized_phone in owner_phone_suffixes()
+
+
 def parse_keywords(raw: str | None) -> list[str]:
     if not raw:
         return BUSINESS_KEYWORDS
@@ -123,6 +178,14 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
         return []
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def load_no_company_action_contacts(path: Path = DEFAULT_NO_COMPANY_ACTION) -> set[str]:
+    return {
+        normalize_name(row.get("contact", ""))
+        for row in read_csv_rows(path)
+        if row.get("decision", "").lower() in {"personal", "no_company_action", "ignore"}
+    }
 
 
 def add_client(
@@ -301,18 +364,26 @@ def matched_queue_rows(
 
         inbound = not bool(row["is_from_me"])
         trusted_contact = bool(matched_contact)
-        needs_reply = inbound and trusted_contact
+        owner_contact = inbound and is_owner_contact(matched_contact, handle)
+        needs_reply = inbound and trusted_contact and not owner_contact
         status = "Needs Reply" if needs_reply else "Review"
         phone = display_phone(handle) if normalized_handle_phone else handle
         contact = matched_contact or "Unknown business keyword match"
+        if owner_contact:
+            status = "Owner Review"
+            match_reasons.append("owner_command_source")
         source = "Mac Messages chat.db | " + ";".join(sorted(set(match_reasons)))
         next_step = (
             "Review and reply from the approved business channel; attach proof after response."
             if needs_reply
             else (
+                "Route as owner-command/private intake; do not place in the client Work Queue unless Brandon asks."
+                if owner_contact
+                else (
                 "Verify this is a FUNDz client or business lead before any reply; keep out of shared systems unless approved."
                 if inbound
                 else "Review for business context; no reply needed unless Governor flags a follow-up gap."
+                )
             )
         )
 
@@ -331,6 +402,117 @@ def matched_queue_rows(
         }
 
     return sorted(latest_by_contact.values(), key=lambda item: item["date"], reverse=True)
+
+
+def client_key(contact: str) -> str:
+    normalized = normalize_name(contact)
+    return f"name:{normalized.replace(' ', '-')}" if normalized else ""
+
+
+def triage_rows(
+    queue_rows: list[dict[str, str]],
+    no_company_action_contacts: set[str] | None = None,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    no_company_action_contacts = no_company_action_contacts or set()
+    inbound_rows = [row for row in queue_rows if row.get("direction") == "inbound"]
+    for index, row in enumerate(inbound_rows, start=1):
+        contact = row.get("contact", "")
+        source = row.get("source", "")
+        owner_command = "owner_command_source" in source or is_owner_contact(contact, row.get("phone", ""))
+        unknown_keyword = contact == "Unknown business keyword match" and "client_" not in source
+        needs_reply = row.get("needs_reply") == "yes"
+        personal_no_action = normalize_name(contact) in no_company_action_contacts
+        sensitive = contact == "Travis Vance"
+
+        if personal_no_action:
+            classification = "personal/no-company-action"
+            move_to_queue = "no"
+            needs_decision = "no"
+            summary = "Brandon identified this personal-phone row as personal. Keep it out of A FUND Solution work."
+            action = "Move on. Do not verify, reply, or create a Work Queue row from this phone item."
+        elif owner_command:
+            classification = "owner-command/private intake"
+            move_to_queue = "no"
+            needs_decision = "no"
+            summary = "Owner-number message surfaced in the business filter; keep it in owner-command/private intake, not the client Work Queue."
+            action = "Handle through the owner-command path if needed. Do not treat as a client reply."
+        elif unknown_keyword:
+            classification = "possible non-client/personal false positive"
+            move_to_queue = "no"
+            needs_decision = "no"
+            summary = "Unknown inbound business-keyword match without a known client phone/name. Keep out of shared systems unless Brandon recognizes it as business."
+            action = "Do not reply from the company workflow. Ignore or handle personally unless Brandon confirms it is FUNDz work."
+        elif needs_reply and sensitive:
+            classification = "needs Brandon decision"
+            move_to_queue = "hold for approval"
+            needs_decision = "yes"
+            summary = "Known historical client phone match for Travis Vance, but not an active-client row; message content is short and sensitive-looking, so do not copy it into shared systems."
+            action = "Brandon should decide whether to verify Travis status in DF/HighLevel. If business-related, create a Work Queue row without exposing the sensitive text; otherwise mark false positive/no action."
+        elif needs_reply:
+            classification = "known client needs review"
+            move_to_queue = "hold for approval"
+            needs_decision = "yes"
+            summary = "Known client phone/name match with an inbound business-filtered message. Keep the shared packet sanitized until Brandon approves handling."
+            action = "Verify current client status and approved response channel before any reply."
+        else:
+            classification = "review only"
+            move_to_queue = "no"
+            needs_decision = "no"
+            summary = "Business-filtered inbound row does not require a company reply from this queue."
+            action = "No shared Work Queue action unless Brandon identifies a business need."
+
+        rows.append(
+            {
+                "triage_id": f"PPM-NEEDS-REPLY-{index:03d}",
+                "contact": contact,
+                "phone": row.get("phone", ""),
+                "date": row.get("date", ""),
+                "classification": classification,
+                "reply_needed": "maybe" if needs_decision == "yes" else "no",
+                "move_to_work_queue": move_to_queue,
+                "needs_brandon_decision": needs_decision,
+                "sanitized_summary": summary,
+                "recommended_action": action,
+                "source": "data/local/command-center/fundz-personal-phone-message-queue.csv",
+            }
+        )
+    return rows
+
+
+def candidate_rows_from_triage(rows: list[dict[str, str]], generated_at: str) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    for row in rows:
+        if row.get("needs_brandon_decision") != "yes":
+            continue
+        contact = row.get("contact", "")
+        slug = normalize_name(contact).replace(" ", "-") or "unknown"
+        sensitive = "sensitive" in row.get("sanitized_summary", "").lower()
+        candidates.append(
+            {
+                "work_order_id": f"FUNDZ-PERSONAL-PHONE-{slug.upper().replace('-', '-')}-{row.get('date', '')[:10].replace('-', '')}",
+                "created_at": generated_at,
+                "actor": "Governor",
+                "system": "FUNDz",
+                "lane": "personal-phone-intake",
+                "queue_status": "Needs Brandon",
+                "client_key": client_key(contact),
+                "client_name": contact,
+                "owner": "Brandon",
+                "due_date": generated_at[:10],
+                "next_step": row.get("recommended_action", ""),
+                "proof_required": "DF/HighLevel current-status proof or Brandon no-action decision. Do not attach sensitive phone-message content to shared systems.",
+                "proof": "",
+                "evidence": f"data/local/command-center/fundz-personal-phone-needs-reply-triage.md#{row.get('triage_id', '')}",
+                "priority_score": "80",
+                "flags": "personal_phone_intake;historical_client_phone"
+                + (";sensitive_content;not_active_client" if sensitive else ""),
+                "browser_required": "yes",
+                "do_not_send_because": "Needs Brandon decision and current client status verification before any reply or shared queue action.",
+                "approval_needed": "yes",
+            }
+        )
+    return candidates
 
 
 def write_dict_csv(path: Path, rows: list[dict[str, str]], fields: list[str]) -> None:
@@ -362,10 +544,54 @@ def write_summary(path: Path, rows: list[dict[str, str]], keywords: list[str], m
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_triage_markdown(path: Path, rows: list[dict[str, str]]) -> None:
+    false_positive = sum(1 for row in rows if row.get("move_to_work_queue") == "no" and row.get("classification") != "owner-command/private intake")
+    owner_private = sum(1 for row in rows if row.get("classification") == "owner-command/private intake")
+    needs_decision = sum(1 for row in rows if row.get("needs_brandon_decision") == "yes")
+    lines = [
+        "# Personal Phone Needs-Reply Triage",
+        "",
+        f"Generated: {datetime.now().astimezone().isoformat(timespec='seconds')}",
+        "",
+        "Privacy note: message bodies are intentionally omitted. This packet contains sanitized summaries only.",
+        "",
+        "## Recommendation",
+        "",
+        "- Move 0 rows into the shared Work Queue automatically.",
+        f"- Treat {false_positive} rows as false-positive/no-company-action unless Brandon recognizes them.",
+        f"- Keep {owner_private} owner-number rows in owner-command/private intake instead of the client queue.",
+        f"- Hold {needs_decision} row for Brandon decision before any shared Work Queue action.",
+        "- Security-code short-code messages are excluded from the personal-phone queue before triage.",
+        "",
+        "## Rows",
+        "",
+    ]
+    for row in rows:
+        lines.extend(
+            [
+                f"### {row['triage_id']} - {row['classification']}",
+                f"- Contact: {row['contact']}",
+                f"- Phone: {row['phone']}",
+                f"- Date: {row['date']}",
+                f"- Reply needed: {row['reply_needed']}",
+                f"- Move to Work Queue: {row['move_to_work_queue']}",
+                f"- Needs Brandon decision: {row['needs_brandon_decision']}",
+                f"- Sanitized summary: {row['sanitized_summary']}",
+                f"- Recommended action: {row['recommended_action']}",
+                "",
+            ]
+        )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def build_queue(
     messages_db: Path = DEFAULT_MESSAGES_DB,
     output: Path = DEFAULT_OUTPUT,
     summary: Path = DEFAULT_SUMMARY,
+    triage: Path = DEFAULT_TRIAGE,
+    triage_md: Path = DEFAULT_TRIAGE_MD,
+    candidates: Path = DEFAULT_CANDIDATES,
+    no_company_action: Path = DEFAULT_NO_COMPANY_ACTION,
     keywords: list[str] | None = None,
     max_messages: int = 50_000,
 ) -> list[dict[str, str]]:
@@ -375,6 +601,11 @@ def build_queue(
     queue_rows = matched_queue_rows(rows, directory, keywords)
     write_dict_csv(output, queue_rows, QUEUE_FIELDS)
     write_summary(summary, queue_rows, keywords, max_messages)
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    triage_output_rows = triage_rows(queue_rows, load_no_company_action_contacts(no_company_action))
+    write_dict_csv(triage, triage_output_rows, TRIAGE_FIELDS)
+    write_triage_markdown(triage_md, triage_output_rows)
+    write_dict_csv(candidates, candidate_rows_from_triage(triage_output_rows, generated_at), CANDIDATE_FIELDS)
     return queue_rows
 
 
@@ -392,6 +623,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--messages-db", type=Path, default=DEFAULT_MESSAGES_DB)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--summary", type=Path, default=DEFAULT_SUMMARY)
+    parser.add_argument("--triage", type=Path, default=DEFAULT_TRIAGE)
+    parser.add_argument("--triage-md", type=Path, default=DEFAULT_TRIAGE_MD)
+    parser.add_argument("--candidates", type=Path, default=DEFAULT_CANDIDATES)
+    parser.add_argument("--no-company-action", type=Path, default=DEFAULT_NO_COMPANY_ACTION)
     parser.add_argument("--keywords", default=",".join(BUSINESS_KEYWORDS))
     parser.add_argument("--max-messages", type=int, default=50_000)
     return parser.parse_args()
@@ -404,6 +639,10 @@ def main() -> int:
             messages_db=args.messages_db,
             output=args.output,
             summary=args.summary,
+            triage=args.triage,
+            triage_md=args.triage_md,
+            candidates=args.candidates,
+            no_company_action=args.no_company_action,
             keywords=parse_keywords(args.keywords),
             max_messages=args.max_messages,
         )
@@ -416,6 +655,7 @@ def main() -> int:
 
     print(f"Wrote {len(rows)} business-message queue row(s): {args.output}")
     print(f"Summary: {args.summary}")
+    print(f"Triage: {args.triage_md}")
     return 0
 
 

@@ -124,6 +124,33 @@ class FundzPhoneAppIntakeTests(unittest.TestCase):
         self.assertEqual(rows[0]["approval_needed"], "yes")
         self.assertIn("Verify this is a FUNDz client", rows[0]["next_step"])
 
+    def test_owner_command_message_stays_private(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            phone_queue = Path(tmp) / "phone.csv"
+            write_csv(
+                phone_queue,
+                ["contact", "phone", "last_message", "date", "direction", "owner", "status", "source"],
+                [
+                    {
+                        "contact": "Brandon Jordan",
+                        "phone": "+13466429919",
+                        "last_message": "FUNDz status",
+                        "date": "2026-05-12T12:00:00-05:00",
+                        "direction": "inbound",
+                        "owner": "Brandon",
+                        "status": "Owner Review",
+                        "source": "Mac Messages chat.db | client_phone;owner_command_source",
+                    }
+                ],
+            )
+
+            rows = phone_intake.intake_from_personal_phone(phone_queue)
+
+        self.assertEqual(rows[0]["category"], "Owner Command / Private")
+        self.assertEqual(rows[0]["status"], "Owner Review")
+        self.assertEqual(rows[0]["shared_safe"], "no")
+        self.assertEqual(rows[0]["sanitized_summary"], "Owner-number message kept private.")
+
     def test_write_outputs(self) -> None:
         report = {
             "generated_at": "2026-05-06T10:00:00-05:00",
@@ -170,6 +197,12 @@ class FundzPhoneAppIntakeTests(unittest.TestCase):
                     "evidence": "phone.csv",
                 }
             ],
+            "existing_member_redirect": {
+                "sop": "assistant/personal-phone-redirect-sop.md",
+                "default_copy": phone_intake.EXISTING_MEMBER_REDIRECT_COPY,
+                "app_access_help_copy": phone_intake.APP_ACCESS_HELP_COPY,
+                "rule": "Existing members who text Brandon's personal line should be redirected to the Credit Tracker app through an approved company channel. Do not auto-reply from the personal line.",
+            },
             "registry": phone_intake.APP_REGISTRY,
             "import_folder": "/tmp/imports",
             "rules": ["No whole phone."],
@@ -193,6 +226,33 @@ class FundzPhoneAppIntakeTests(unittest.TestCase):
             self.assertTrue(paths["dashboard"].exists())
             self.assertEqual(json.loads(paths["json"].read_text(encoding="utf-8"))["summary"]["rows"], 1)
             self.assertIn("FUNDz Phone App Intake", paths["dashboard"].read_text(encoding="utf-8"))
+            self.assertIn("Existing Member Redirect", paths["markdown"].read_text(encoding="utf-8"))
+            self.assertIn("Credit Tracker app", paths["dashboard"].read_text(encoding="utf-8"))
+
+    def test_build_report_includes_existing_member_redirect_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            phone_queue = base / "phone.csv"
+            governor_candidates = base / "candidates.csv"
+            import_dir = base / "imports"
+            import_dir.mkdir()
+            write_csv(phone_queue, ["contact", "phone", "last_message", "date", "direction", "owner"], [])
+            write_csv(
+                governor_candidates,
+                ["source", "contact", "phone", "queue_status", "owner", "next_step", "proof_required", "approval_needed", "shared_safe", "reason", "evidence"],
+                [],
+            )
+
+            with (
+                mock.patch.object(phone_intake, "PERSONAL_PHONE_QUEUE_CSV", phone_queue),
+                mock.patch.object(phone_intake, "INTAKE_GOVERNOR_CANDIDATES_CSV", governor_candidates),
+                mock.patch.object(phone_intake, "IMPORT_DIR", import_dir),
+            ):
+                report = phone_intake.build_phone_app_intake()
+
+        redirect = report["existing_member_redirect"]
+        self.assertIn("Credit Tracker app", redirect["default_copy"])
+        self.assertIn("approved company channel", redirect["rule"])
 
 
 if __name__ == "__main__":
