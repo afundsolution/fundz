@@ -1,6 +1,6 @@
 # FUNDz Slackbot Team Sequence
 
-Generated: 2026-05-13T10:29:43-05:00
+Generated: 2026-05-13T11:12:53-05:00
 
 ## Mission
 
@@ -98,6 +98,14 @@ Slackbot is the team librarian and coordinator. FUNDz/LOGIC are the operators th
 - Use the shared Slackbot context-packet prompt for searches and summaries.
 - Use FUNDz/LOGIC prompts for decisions, proof status, and next actions.
 - After one week, compare workorder completion, open blockers, and proof gaps before expanding workflows.
+
+## Live Slack Setup
+
+- Canvas: https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC
+- Kickoff message: https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279
+- Kickoff channel: #logic-briefing
+- Channel creation status: manual_admin_required
+- Connector limit: The available Slack connector can create canvases and post messages, but it cannot create channels.
 
 ## Copy-Ready Prompts
 

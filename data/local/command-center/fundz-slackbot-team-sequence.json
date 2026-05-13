@@ -126,7 +126,14 @@
       "time": "Before closeout"
     }
   ],
-  "generated_at": "2026-05-13T10:29:43-05:00",
+  "generated_at": "2026-05-13T11:12:53-05:00",
+  "live_slack_setup": {
+    "canvas_url": "https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC",
+    "channel_creation_status": "manual_admin_required",
+    "connector_limit": "The available Slack connector can create canvases and post messages, but it cannot create channels.",
+    "kickoff_channel": "#logic-briefing",
+    "kickoff_message_url": "https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279"
+  },
   "mission": "Use Slackbot and Slack AI as the internal team memory, recap, search, reminder, and canvas layer.",
   "prompt_templates": {
     "daily_board_prompt": "Summarize today's A FUND Solution board in plain language for the team.\n\nUse only posted source files or channel messages. Return:\n1. What matters now\n2. Blocked\n3. Needs Brandon\n4. Safe local work\n5. Proof needed before anything is called done",

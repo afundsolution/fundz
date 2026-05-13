@@ -35,6 +35,8 @@ SLACKBOT_SEQUENCE_MD = OUTPUT_DIR / "fundz-slackbot-team-sequence.md"
 SLACKBOT_SEQUENCE_JSON = OUTPUT_DIR / "fundz-slackbot-team-sequence.json"
 SLACKBOT_CHANNELS_CSV = OUTPUT_DIR / "fundz-slackbot-team-channels.csv"
 SLACKBOT_SOP_MD = ROOT / "assistant" / "fundz-slackbot-team-sequence.md"
+SLACK_CANVAS_URL = "https://afundsolution.slack.com/docs/T0335UDK8AG/F0B3LU8H6TC"
+SLACK_KICKOFF_URL = "https://afundsolution.slack.com/archives/C0AUEF81TKM/p1778688658173279"
 
 CHANNEL_FIELDS = [
     "channel",
@@ -206,6 +208,13 @@ def build_sequence(
             "Workflow automation and canvas generation for checklists and handoffs.",
             "Slackbot for limited weekly personal assistant prompts where the workspace plan allows it.",
         ],
+        "live_slack_setup": {
+            "canvas_url": SLACK_CANVAS_URL,
+            "kickoff_message_url": SLACK_KICKOFF_URL,
+            "kickoff_channel": "#logic-briefing",
+            "channel_creation_status": "manual_admin_required",
+            "connector_limit": "The available Slack connector can create canvases and post messages, but it cannot create channels.",
+        },
         "current_fundz_context": {
             "work_queue_rows": len(work_rows),
             "status_counts": dict(sorted(status_counts.items())),
@@ -324,6 +333,20 @@ def render_markdown(report: dict[str, Any]) -> str:
 
     lines.extend(["## Rollout Steps", ""])
     lines.extend(f"- {step}" for step in report["rollout_steps"])
+    live_setup = report.get("live_slack_setup")
+    if live_setup:
+        lines.extend(
+            [
+                "",
+                "## Live Slack Setup",
+                "",
+                f"- Canvas: {live_setup['canvas_url']}",
+                f"- Kickoff message: {live_setup['kickoff_message_url']}",
+                f"- Kickoff channel: {live_setup['kickoff_channel']}",
+                f"- Channel creation status: {live_setup['channel_creation_status']}",
+                f"- Connector limit: {live_setup['connector_limit']}",
+            ]
+        )
     lines.extend(["", "## Copy-Ready Prompts", ""])
     for name, prompt in report["prompt_templates"].items():
         lines.extend([f"### {name.replace('_', ' ').title()}", "", "```text", prompt, "```", ""])
