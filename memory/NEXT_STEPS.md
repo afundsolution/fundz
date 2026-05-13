@@ -107,8 +107,8 @@ The backlog below is preserved for a future wake request. Do not treat it as per
 34. Keep `fundz-bridge` and `fundz-tunnel` running, then convert them to a LaunchAgent/service if Brandon wants always-on startup behavior after reboots.
 35. Watch `logs/credit-tracker-bridge.jsonl` and `logs/cloudflared-fundz.out` after the first real webhook event.
 36. Keep GitHub branch protection verified after major workflow changes; `main` currently requires both `memory-check` and `python-tests`.
-37. Supabase command-line sync blocker: get the current Supabase database password from Dashboard -> Project Settings -> Database -> Connection string, or reset it only when ready to update anything else using the old DB password. Add the current Postgres connection string to `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` or `SUPABASE_DB_URL`; do not use a Supabase API URL or API key.
-38. After the database URL is configured, run `make supabase-memory-sync` and confirm live row counts. If the database URL is still unavailable, use the latest generated fallback chunks in `data/local/supabase-dashboard-sync`: run `chunk-000-snapshot.sql`, then every `chunk-###-clients.sql` in order, then `chunk-032-verify.sql` in Supabase SQL editor. Expected final verification after apply is 357 total client rows, 180 active client rows, 180 active-client view rows, and 1 dashboard snapshot marker.
+37. Supabase command-line sync is available locally through `.env.local` key `FUNDZ_MEMORY_DATABASE_URL`. Do not print this value or commit `.env.local`. Re-run `make supabase-memory-sync` whenever the local memory source needs to be pushed to Supabase.
+38. After future Supabase syncs, verify live counts with a read-back query. Latest verified counts: 360 total `fundz_client_memory` rows, 180 active rows, 180 active-view rows, and 2 snapshots after syncing 357 generated local profiles / 180 active profiles.
 
 ## After That
 
