@@ -40,7 +40,7 @@ class FundzAutonomousOperatorTests(unittest.TestCase):
             path.mkdir(parents=True, exist_ok=True)
         self.maintenance_md.write_text("# Maintenance\n", encoding="utf-8")
         self.daily_board.write_text(
-            "# FUNDz Daily Board\n\nToday: safe local autonomy.\nNext Action: Review queue.\n",
+            "# A FUND Solution Daily Board\n\nToday: safe local autonomy.\nNext Action: Review queue.\n",
             encoding="utf-8",
         )
         self.maintenance_json.write_text(

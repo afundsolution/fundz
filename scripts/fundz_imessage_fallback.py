@@ -314,7 +314,7 @@ def build_daily_board_reply() -> str:
         check=False,
     )
     if completed.returncode != 0:
-        return "I could not refresh the Daily Board locally. Check FUNDz command center logs before doing live work."
+        return "I could not refresh the Daily Board locally. Check the A FUND Solution Command Center logs before doing live work."
     board_path = ROOT / "data" / "local" / "command-center" / "fundz-daily-board.md"
     try:
         text = board_path.read_text(encoding="utf-8")

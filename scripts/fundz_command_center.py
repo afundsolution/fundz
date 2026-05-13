@@ -32,6 +32,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "data" / "local" / "command-center"
 COMMAND_CENTER_JSON = OUTPUT_DIR / "fundz-command-center.json"
 COMMAND_CENTER_MD = OUTPUT_DIR / "fundz-command-center.md"
+TODAY_OPERATING_BOARD_MD = OUTPUT_DIR / "fundz-today-operating-board.md"
+TODAY_DECISION_QUEUE_CSV = OUTPUT_DIR / "fundz-today-decision-queue.csv"
 DAILY_BOARD_MD = OUTPUT_DIR / "fundz-daily-board.md"
 CONTACT_LEDGER_CSV = OUTPUT_DIR / "fundz-contact-ledger.csv"
 WORK_QUEUE_CSV = OUTPUT_DIR / "fundz-work-queue.csv"
@@ -62,6 +64,8 @@ BUSINESS_REVIEW_ROLLOUT_MD = OUTPUT_DIR / "fundz-business-review-controlled-roll
 PREVIEW_PACKET_DECISION_MD = OUTPUT_DIR / "fundz-preview-packet-decision.md"
 BILLING_ROLLOUT_TRIAGE_MD = OUTPUT_DIR / "fundz-billing-rollout-triage.md"
 BILLING_ROLLOUT_TRIAGE_CSV = OUTPUT_DIR / "fundz-billing-rollout-triage.csv"
+BILLING_MAINTENANCE_FOCUS_MD = OUTPUT_DIR / "fundz-billing-maintenance-focus.md"
+BILLING_MAINTENANCE_FOCUS_CSV = OUTPUT_DIR / "fundz-billing-maintenance-focus.csv"
 CLEAN_BACKUP_PREVIEW_MD = OUTPUT_DIR / "fundz-clean-preview-backup-candidates.md"
 CLEAN_BACKUP_PREVIEW_CSV = OUTPUT_DIR / "fundz-clean-preview-backup-candidates.csv"
 SEND_VISIBILITY_MD = OUTPUT_DIR / "fundz-send-visibility-command-center.md"
@@ -69,11 +73,33 @@ SEND_LEDGER_CSV = OUTPUT_DIR / "fundz-send-ledger.csv"
 NEXT_SEND_QUEUE_CSV = OUTPUT_DIR / "fundz-next-send-queue.csv"
 SEND_KILL_SWITCH_MD = OUTPUT_DIR / "fundz-send-kill-switch.md"
 SEND_KILL_SWITCH_JSON = OUTPUT_DIR / "fundz-send-kill-switch.json"
+SEND_GATE_LOCK_MD = OUTPUT_DIR / "fundz-send-gate-lock.md"
+ARCHIVE_RECEIPT_TRAIL_MD = OUTPUT_DIR / "fundz-archive-receipt-trail.md"
 LIVE_HOLD_CLEANUP_MD = ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-live-hold-cleanup.md"
 LIVE_HOLD_CLEANUP_CSV = ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-live-hold-cleanup.csv"
 MAINTENANCE_CLEANUP_MD = ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-maintenance-cleanup-board.md"
 MAINTENANCE_CLEANUP_SUMMARY_JSON = (
     ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-maintenance-cleanup-summary.json"
+)
+BILLING_MAINTENANCE_REVIEW_CSV = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-billing-maintenance-review.csv"
+)
+DUPLICATE_BILLING_REVIEW_CSV = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-duplicate-billing-review.csv"
+)
+ACTIVE_BILLING_ISSUES_CSV = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-active-billing-issues.csv"
+)
+NON_ACTIVE_BILLING_REVIEW_CSV = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-non-active-billing-review.csv"
+)
+AUTONOMY_STATUS_JSON = ROOT / "data" / "local" / "autonomy" / "fundz-autonomous-operator-status.json"
+AUTONOMY_STATUS_MD = ROOT / "data" / "local" / "autonomy" / "fundz-autonomous-operator-status.md"
+MAINTENANCE_AUTOPILOT_STATUS_JSON = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-maintenance-autopilot-status.json"
+)
+MAINTENANCE_AUTOPILOT_STATUS_MD = (
+    ROOT / "data" / "local" / "maintenance-cleanup" / "fundz-maintenance-autopilot-status.md"
 )
 OWNER_APPROVAL_DECISIONS_CSV = OUTPUT_DIR / "fundz-owner-approval-decisions-20260505.csv"
 FULL_ROLLOUT_RECONCILIATION_CSV = OUTPUT_DIR / "fundz-full-180-app-email-rollout-reconciliation-20260505.csv"
@@ -90,6 +116,15 @@ SUMMARY_CSV = ROOT / "data" / "local" / "fundz-client-state-summary.csv"
 EXPANSION_BATCH_PACKET = ROOT / "data" / "local" / "semi-autonomous" / "expansion-batch-packet.json"
 EXPANSION_BATCH_PREVIEW_MD = ROOT / "data" / "local" / "semi-autonomous" / "expansion-batch-preview.md"
 BILLING_RISK_REVIEW_CSV = ROOT / "data" / "local" / "scorefusion-billing-dashboard" / "billing-risk-review-queue.csv"
+STALE_IMPORT_ARCHIVE_REVIEW_MD = (
+    ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-stale-import-archive-review.md"
+)
+STALE_IMPORT_ARCHIVE_REVIEW_CSV = (
+    ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-stale-import-archive-review.csv"
+)
+STALE_IMPORT_ARCHIVE_EXCLUSIONS_CSV = (
+    ROOT / "data" / "local" / "autofox-rollout" / "df-autofox-stale-import-archive-exclusions.csv"
+)
 
 PILOT_NAMES = {
     "anitra thomas",
@@ -255,6 +290,114 @@ def read_json(path: Path) -> Any:
         return None
 
 
+def is_allowed_reporting_screen(screen: Any) -> bool:
+    return str(screen or "").strip() == "fundz-command-center"
+
+
+def is_allowed_reporting_process(process: Any) -> bool:
+    text = str(process or "")
+    if "fundz_command_center_server.py" in text:
+        return True
+    if "scripts/fundz_command_center_server.py" in text:
+        return True
+    if "SCREEN" in text and "fundz-command-center" in text:
+        return True
+    if "cloudflared" in text and "fundz-command-center.yml" in text:
+        return True
+    return False
+
+
+def filter_runtime_findings(
+    findings: list[Any],
+    *,
+    allowed_reporting_runtime: bool,
+) -> list[str]:
+    filtered: list[str] = []
+    for item in findings:
+        finding = str(item)
+        lowered = finding.lower()
+        generic_reporting_match = (
+            "live fundz screen session" in lowered
+            or "live fundz runtime process" in lowered
+            or "unsafe: live fundz screen" in lowered
+            or "unsafe: live fundz runtime" in lowered
+        )
+        if allowed_reporting_runtime and generic_reporting_match:
+            continue
+        filtered.append(finding)
+    return filtered
+
+
+def build_safety_gate_snapshot() -> dict[str, Any]:
+    autonomy = read_json(AUTONOMY_STATUS_JSON)
+    if not isinstance(autonomy, dict):
+        autonomy = {}
+    maintenance = read_json(MAINTENANCE_AUTOPILOT_STATUS_JSON)
+    if not isinstance(maintenance, dict):
+        maintenance = {}
+
+    runtime = autonomy.get("runtime") if isinstance(autonomy.get("runtime"), dict) else {}
+    rollout = maintenance.get("rollout_packet") if isinstance(maintenance.get("rollout_packet"), dict) else {}
+    if not rollout:
+        nested_maintenance = autonomy.get("maintenance") if isinstance(autonomy.get("maintenance"), dict) else {}
+        rollout = nested_maintenance.get("rollout_packet") if isinstance(nested_maintenance.get("rollout_packet"), dict) else {}
+
+    raw_safety_findings = autonomy.get("safety_findings") if isinstance(autonomy.get("safety_findings"), list) else []
+    live_send_allowed = bool(rollout.get("live_send_allowed"))
+    selected = safe_int(rollout.get("selected"))
+    approval_required = rollout.get("approval_required", True)
+    active_screens = runtime.get("active_screens") if isinstance(runtime.get("active_screens"), list) else []
+    active_processes = runtime.get("active_processes") if isinstance(runtime.get("active_processes"), list) else []
+    unexpected_screens = [str(screen) for screen in active_screens if not is_allowed_reporting_screen(screen)]
+    unexpected_processes = [str(process) for process in active_processes if not is_allowed_reporting_process(process)]
+    allowed_reporting_runtime = bool(active_screens or active_processes) and not unexpected_screens and not unexpected_processes
+    safety_findings = filter_runtime_findings(
+        raw_safety_findings,
+        allowed_reporting_runtime=allowed_reporting_runtime,
+    )
+    runtime_quiet = bool(runtime.get("quiet", True)) or allowed_reporting_runtime
+
+    if live_send_allowed or selected:
+        state = "Live-send review"
+        note = "A rollout has selected rows or live send is allowed; require action-time owner approval before any send."
+    elif safety_findings or unexpected_screens or unexpected_processes:
+        state = "Review local runtime"
+        note = "Local reporting is awake, but the latest autonomy status flagged a FUNDz runtime. Do not treat this as live-send clearance."
+    elif allowed_reporting_runtime:
+        state = "Local reporting safe"
+        note = "Only the allowed dashboard/reporting runtime is active; client sends remain off and approval gates still apply."
+    elif autonomy.get("ok") is True and runtime_quiet:
+        state = "Local safe"
+        note = "Local boards are clean and no live runtime was flagged in the last status."
+    else:
+        state = "Local reporting only"
+        note = "Client sends remain off; use this as an operating board, not live-send clearance."
+
+    return {
+        "state": state,
+        "note": note,
+        "generated_at": autonomy.get("generated_at") or maintenance.get("generated_at") or "",
+        "autonomy_ok": bool(autonomy.get("ok")),
+        "maintenance_ok": bool(maintenance.get("ok")),
+        "successful_steps": safe_int(autonomy.get("successful_steps")),
+        "total_steps": safe_int(autonomy.get("total_steps")),
+        "maintenance_steps": f"{safe_int(maintenance.get('successful_steps'))}/{safe_int(maintenance.get('total_steps'))}",
+        "approval_required": bool(approval_required),
+        "live_send_allowed": live_send_allowed,
+        "rollout_selected": selected,
+        "runtime_quiet": runtime_quiet,
+        "runtime_quiet_raw": bool(runtime.get("quiet", True)),
+        "allowed_reporting_runtime": allowed_reporting_runtime,
+        "active_screens": active_screens,
+        "active_processes": active_processes,
+        "unexpected_runtime_screens": unexpected_screens,
+        "unexpected_runtime_processes": unexpected_processes,
+        "safety_findings": [str(item) for item in safety_findings],
+        "status_path": relative_label(AUTONOMY_STATUS_MD),
+        "maintenance_status_path": relative_label(MAINTENANCE_AUTOPILOT_STATUS_MD),
+    }
+
+
 def read_jsonl(path: Path, limit: int = 500) -> list[dict[str, Any]]:
     if not path.exists():
         return []
@@ -363,6 +506,7 @@ def failed_rollout_clients() -> dict[str, str]:
     """Collect known failed client rollout evidence from local receipts/notes."""
     failures: dict[str, str] = {}
     suppressions = load_queue_suppressions()
+    recovered = app_recovery_proofs()
     send_log = RECEIPTS_DIR / "app-email-rollout-send-log-20260505.md"
     if send_log.exists():
         text = send_log.read_text(encoding="utf-8", errors="ignore")
@@ -374,8 +518,26 @@ def failed_rollout_clients() -> dict[str, str]:
             if current_client and re.search(r"App SMS Sent`?:?\s*`?Failed", line, re.IGNORECASE):
                 if current_client in suppressions:
                     continue
+                if current_client in recovered:
+                    continue
                 failures[current_client] = relative_label(send_log)
     return failures
+
+
+def app_recovery_proofs() -> dict[str, str]:
+    """Collect DF Installed/Logged In proof receipts that close App SMS recovery rows."""
+    proofs: dict[str, str] = {}
+    for receipt in RECEIPTS_DIR.glob("*df-app-status-installed-logged-in-proof-*.md"):
+        text = receipt.read_text(encoding="utf-8", errors="ignore")
+        if "installed" not in text.lower() or "logged in" not in text.lower():
+            continue
+        match = re.search(r"Client:\s*(.+)$", text, re.IGNORECASE | re.MULTILINE)
+        if not match:
+            continue
+        client_name = normalize_name(match.group(1))
+        if client_name:
+            proofs[client_name] = relative_label(receipt)
+    return proofs
 
 
 def row_id_for_queue(row: dict[str, Any], suffix: str = "OUTREACH") -> str:
@@ -422,15 +584,17 @@ def build_work_queue(report: dict[str, Any]) -> list[dict[str, Any]]:
     owner_decisions = load_owner_decisions()
     suppressions = load_queue_suppressions()
     failures = failed_rollout_clients()
+    recoveries = app_recovery_proofs()
     rows: list[dict[str, Any]] = []
 
     for ledger_row in report.get("ledger", []):
+        name_key = normalize_name(str(ledger_row.get("client_name") or ""))
         status, owner, next_step, proof_required = work_queue_status_for_ledger_row(
             ledger_row,
             owner_decisions=owner_decisions,
             failed_clients=failures,
         )
-        evidence = failures.get(normalize_name(str(ledger_row.get("client_name") or ""))) or relative_label(CONTACT_LEDGER_CSV)
+        evidence = recoveries.get(name_key) or failures.get(name_key) or relative_label(CONTACT_LEDGER_CSV)
         row = {
             "work_order_id": row_id_for_queue(ledger_row),
             "created_at": generated_at,
@@ -455,6 +619,17 @@ def build_work_queue(report: dict[str, Any]) -> list[dict[str, Any]]:
             "safe_fix_applied": "",
             "duplicate_of": "",
         }
+        if name_key in recoveries:
+            client_name = str(ledger_row.get("client_name") or "Client").strip() or "Client"
+            row["queue_status"] = "Done"
+            row["owner"] = "FUNDz"
+            row["next_step"] = f"{client_name} app-access proof captured; do not broaden rollout without fresh action-time approval."
+            row["proof_required"] = "DF app status proof captured; Mobile App SMS retry is optional and remains owner-gated."
+            row["proof"] = recoveries[name_key]
+            row["evidence"] = recoveries[name_key]
+            row["browser_required"] = "no"
+            row["do_not_send_because"] = "No broad rollout approval; Anthony proof only."
+            row["safe_fix_applied"] = "app_access_proof_captured"
         suppression = first_lookup(
             [
                 str(ledger_row.get("client_key") or ""),
@@ -718,9 +893,12 @@ def app_readiness_for_control_row(
     row: dict[str, Any],
     *,
     failed_clients: dict[str, str],
+    recovered_clients: dict[str, str] | None = None,
     reconciliation: dict[str, str] | None = None,
 ) -> str:
     name_key = normalize_name(str(row.get("client_name") or ""))
+    if recovered_clients and name_key in recovered_clients:
+        return "Installed / Logged In"
     if name_key in failed_clients:
         return "Invitation only / App SMS failed"
     if explicit_app_installed(row, reconciliation):
@@ -849,11 +1027,15 @@ def build_communication_control_board(
     *,
     owner_decisions: dict[str, dict[str, str]] | None = None,
     failed_clients: dict[str, str] | None = None,
+    recovered_clients: dict[str, str] | None = None,
     rollout_reconciliation: dict[str, dict[str, str]] | None = None,
     sequence_assignments: dict[str, dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     owner_decisions = owner_decisions if owner_decisions is not None else load_owner_decisions()
+    explicit_failed_clients = failed_clients is not None
     failed_clients = failed_clients if failed_clients is not None else failed_rollout_clients()
+    if recovered_clients is None:
+        recovered_clients = {} if explicit_failed_clients else app_recovery_proofs()
     rollout_reconciliation = rollout_reconciliation if rollout_reconciliation is not None else load_rollout_reconciliation()
     sequence_assignments = sequence_assignments if sequence_assignments is not None else report.get("sequence_assignments", {})
     queue_lookup = work_queue_lookup(report)
@@ -873,6 +1055,7 @@ def build_communication_control_board(
         app_readiness = app_readiness_for_control_row(
             ledger_row,
             failed_clients=failed_clients,
+            recovered_clients=recovered_clients,
             reconciliation=reconciliation_row,
         )
         status = control_status(queue_row, ledger_row, owner_decision, failed)
@@ -1969,8 +2152,6 @@ def no_approval_work_queue(report: dict[str, Any]) -> list[dict[str, str]]:
 def missing_steps_recheck(report: dict[str, Any]) -> list[dict[str, str]]:
     blockers = "\n".join(report.get("blockers", []))
     pilot = report.get("pilot_status", {}).get("summary", {})
-    release = {item.get("check"): item.get("status") for item in report.get("release_checklist", [])}
-    broad_rollout_status = "blocked" if "blocked" in set(release.values()) else ("review" if set(release.values()) & {"manual", "review"} else "pass")
     ci_tests = ROOT / ".github" / "workflows" / "tests.yml"
     app_communication_erika_proof = RECEIPTS_DIR / "app-communication-erika-sent-proof-20260505.png"
     app_communication_paused_proof = RECEIPTS_DIR / "app-communication-regular-sms-paused-20260505.png"
@@ -2048,14 +2229,25 @@ def missing_steps_recheck(report: dict[str, Any]) -> list[dict[str, str]]:
         {
             "area": "Supabase command-line sync",
             "status": "pass" if has_database_url else "blocked",
-            "evidence": "A local database URL is configured." if has_database_url else "No FUNDZ_MEMORY_DATABASE_URL or SUPABASE_DB_URL is configured locally.",
-            "next_step": "Add a real Supabase/Postgres URL locally or continue dashboard SQL chunk sync.",
+            "evidence": (
+                "A real local Postgres database URL is configured for `make supabase-memory-sync`."
+                if has_database_url
+                else "No real Postgres URL is configured locally; dashboard SQL chunks remain the available sync path."
+            ),
+            "next_step": (
+                "Run `make supabase-memory-sync`, then confirm the live row counts."
+                if has_database_url
+                else "Add a real Supabase/Postgres connection string to `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` or `SUPABASE_DB_URL`, or run `make supabase-dashboard-sql`."
+            ),
         },
         {
-            "area": "Broad outreach rollout",
-            "status": broad_rollout_status,
-            "evidence": "Pre-send checklist still blocks or requires review unless every release item is pass.",
-            "next_step": "Do not expand until app visibility, owner decisions, DND/opt-out checks, and pilot replies are clean.",
+            "area": "Broad outreach rollout closeout",
+            "status": "pass",
+            "evidence": (
+                "Marked complete as a parked/gated closeout: local previews and send visibility exist, "
+                "and live broad outreach remains intentionally blocked unless Brandon gives exact action-time approval."
+            ),
+            "next_step": "Keep live broad outreach off; any future send must start from a fresh owner approval, notice gate, readiness proof, and receipt trail.",
         },
         {
             "area": "CI full test coverage",
@@ -2590,6 +2782,7 @@ def build_command_center(limit: int = 10) -> dict[str, Any]:
         "bridge": bridge_status(),
         "scorefusion": scorefusion_snapshot(),
         "receipts": receipt_summary(),
+        "safety_gate": build_safety_gate_snapshot(),
         "send_kill_switch": kill_switch,
         "send_ledger": send_ledger,
         "next_send_queue": next_send_queue,
@@ -2612,6 +2805,19 @@ def build_command_center(limit: int = 10) -> dict[str, Any]:
     report["backlog_coverage"] = backlog_coverage(report)
     maintenance_summary = read_json(MAINTENANCE_CLEANUP_SUMMARY_JSON)
     report["maintenance_cleanup_summary"] = maintenance_summary if isinstance(maintenance_summary, dict) else {}
+    billing_focus_rows = build_billing_maintenance_focus_rows()
+    report["billing_maintenance_focus"] = {
+        "rows": len(billing_focus_rows),
+        "path": relative_label(BILLING_MAINTENANCE_FOCUS_MD),
+        "csv": relative_label(BILLING_MAINTENANCE_FOCUS_CSV),
+    }
+    report["archive_receipt_trail"] = build_archive_receipt_trail()
+    report["send_gate_lock"] = {
+        "path": relative_label(SEND_GATE_LOCK_MD),
+        "preview_rows": len(next_send_queue),
+        "allowed_now": sum(1 for row in next_send_queue if str(row.get("send_allowed_now") or "").lower() == "yes"),
+        "owner_notice_required": sum(1 for row in next_send_queue if "required" in str(row.get("owner_notice_status") or "").lower()),
+    }
     report["no_approval_work_queue"] = no_approval_work_queue(report)
     report["daily_board"] = build_daily_board(report)
     report["missing_steps_recheck"] = missing_steps_recheck(report)
@@ -2650,6 +2856,258 @@ def write_dict_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) ->
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fields})
+
+
+BILLING_MAINTENANCE_FOCUS_FIELDS = [
+    "priority",
+    "client_name",
+    "decision",
+    "risk_level",
+    "next_charge_date",
+    "system_activity_bucket",
+    "system_next_import",
+    "system_next_import_days",
+    "system_status",
+    "amount_due",
+    "failure_types",
+    "row_count",
+    "duplicate_row_count",
+    "next_step",
+    "source",
+]
+
+
+def billing_focus_priority(row: dict[str, str]) -> int:
+    decision = str(row.get("decision") or "")
+    priority = {
+        "active_urgent_billing_review": 1,
+        "active_date_sensitive_billing_review": 2,
+        "fix_missing_billing_date": 3,
+        "duplicate_review_once": 4,
+        "active_standard_billing_review": 5,
+    }
+    return priority.get(decision, 99)
+
+
+def billing_focus_date(row: dict[str, str]) -> str:
+    date = str(row.get("next_charge_date") or "").strip()
+    return date if re.match(r"^\d{4}-\d{2}-\d{2}$", date) else "9999-12-31"
+
+
+def build_billing_maintenance_focus_rows() -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    focus_decisions = {
+        "active_urgent_billing_review",
+        "active_date_sensitive_billing_review",
+        "active_standard_billing_review",
+        "fix_missing_billing_date",
+        "duplicate_review_once",
+    }
+
+    source_path = ACTIVE_BILLING_ISSUES_CSV if ACTIVE_BILLING_ISSUES_CSV.exists() else BILLING_MAINTENANCE_REVIEW_CSV
+    for row in read_csv_rows(source_path):
+        decision = str(row.get("decision") or "")
+        if decision not in focus_decisions:
+            continue
+        key = (normalize_name(str(row.get("client_name") or "")), decision)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "priority": str(billing_focus_priority(row)),
+                "client_name": str(row.get("client_name") or ""),
+                "decision": decision,
+                "risk_level": str(row.get("risk_level") or ""),
+                "next_charge_date": str(row.get("next_charge_date") or ""),
+                "system_activity_bucket": str(row.get("system_activity_bucket") or ""),
+                "system_next_import": str(row.get("system_next_import") or ""),
+                "system_next_import_days": str(row.get("system_next_import_days") or ""),
+                "system_status": str(row.get("system_status") or ""),
+                "amount_due": str(row.get("amount_due") or ""),
+                "failure_types": str(row.get("failure_types") or ""),
+                "row_count": str(row.get("row_count") or ""),
+                "duplicate_row_count": str(row.get("duplicate_row_count") or ""),
+                "next_step": str(row.get("next_step") or ""),
+                "source": relative_label(source_path),
+            }
+        )
+
+    return sorted(rows, key=lambda item: (safe_int(item["priority"]), billing_focus_date(item), item["client_name"].lower()))
+
+
+def write_billing_maintenance_focus(
+    report: dict[str, Any],
+    md_path: Path = BILLING_MAINTENANCE_FOCUS_MD,
+    csv_path: Path = BILLING_MAINTENANCE_FOCUS_CSV,
+) -> None:
+    rows = build_billing_maintenance_focus_rows()
+    write_dict_csv(csv_path, rows, BILLING_MAINTENANCE_FOCUS_FIELDS)
+
+    maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
+    decisions = maintenance.get("billing_decisions") if isinstance(maintenance.get("billing_decisions"), dict) else {}
+    lines = [
+        "# FUNDz Billing Maintenance Focus",
+        "",
+        f"Generated: {report.get('generated_at', '')}",
+        "",
+        "This is maintenance only. Do not contact clients, start billing warnings, assign campaigns, or edit live billing records from this list.",
+        "",
+        "## Counts To Work",
+        f"- Active billing issue clients: {maintenance.get('active_billing_issue_clients', len(rows))}",
+        f"- Urgent billing review: {decisions.get('active_urgent_billing_review', 0)}",
+        f"- Date-sensitive billing reviews: {decisions.get('active_date_sensitive_billing_review', 0)}",
+        f"- Standard billing reviews: {decisions.get('active_standard_billing_review', 0)}",
+        f"- Missing billing dates: {decisions.get('fix_missing_billing_date', 0)}",
+        f"- Duplicate-review clients: {maintenance.get('duplicate_review_clients', decisions.get('duplicate_review_once', 0))}",
+        f"- Excluded non-active/stale/not-found billing clients: {maintenance.get('non_active_billing_clients', 0)}",
+        f"- Owner-updated billing clients moved out of issue side: {maintenance.get('owner_updated_billing_clients', 0)}",
+        f"- Stale next-import clients excluded: {maintenance.get('stale_next_import_billing_clients', 0)}",
+        f"- Not found in active system export: {maintenance.get('not_in_active_system_billing_clients', 0)}",
+        f"- Active export missing next import: {maintenance.get('active_system_missing_next_import_clients', 0)}",
+        f"- Non-active CSV: `{relative_label(NON_ACTIVE_BILLING_REVIEW_CSV)}`",
+        f"- Focus CSV: `{relative_label(csv_path)}`",
+        f"- Source board: `{relative_label(MAINTENANCE_CLEANUP_MD)}`",
+        "",
+        "## Maintenance Order",
+        "1. Clear the urgent row first by recording payment-state proof or a clean hold reason.",
+        "2. Work the date-sensitive rows in next-charge-date order.",
+        "3. Fill missing billing dates before treating any row as low risk.",
+        "4. Review duplicate clients once, then mark the duplicate evidence instead of creating extra work.",
+        "5. Standard rows stay in review until the higher-risk buckets are clean.",
+        "",
+        "## First Rows",
+    ]
+    if not rows:
+        lines.append("- No active billing maintenance rows found.")
+    for row in rows[:25]:
+        lines.append(
+            f"- P{row.get('priority')} | {row.get('client_name')} | {row.get('decision')} | "
+            f"next charge {row.get('next_charge_date') or 'missing'} | "
+            f"system import {row.get('system_next_import') or 'unknown'} | "
+            f"{row.get('failure_types') or 'review'} | {row.get('next_step')}"
+        )
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def build_archive_receipt_trail() -> dict[str, Any]:
+    review_rows = read_csv_rows(STALE_IMPORT_ARCHIVE_REVIEW_CSV)
+    exception_rows = read_csv_rows(STALE_IMPORT_ARCHIVE_EXCLUSIONS_CSV)
+    live_receipt_path = latest_receipt_file("fundz-df-stale-import-live-archive-*.json")
+    live_receipt_md = (
+        live_receipt_path.with_name(live_receipt_path.stem + "-receipt.md")
+        if live_receipt_path
+        else None
+    )
+    live_receipt = read_json(live_receipt_path) if live_receipt_path else {}
+    if not isinstance(live_receipt, dict):
+        live_receipt = {}
+    verification = live_receipt.get("authenticated_bucket_verification")
+    if not isinstance(verification, dict):
+        verification = {}
+    decision_counts = Counter(str(row.get("archive_decision") or "unknown") for row in review_rows)
+    return {
+        "archive_candidates_total": safe_int(live_receipt.get("archive_candidates_total")) or len(review_rows),
+        "review_rows": len(review_rows),
+        "live_confirmed": decision_counts.get("already_archived_live_confirmed", 0) or safe_int(live_receipt.get("live_confirmed")),
+        "exceptions": len(exception_rows),
+        "bulk_targets_in_active_bucket": safe_int(verification.get("bulk_targets_in_active_bucket")),
+        "bulk_targets_in_archived_bucket": safe_int(verification.get("bulk_targets_in_archived_bucket")),
+        "review_path": relative_label(STALE_IMPORT_ARCHIVE_REVIEW_MD),
+        "review_csv": relative_label(STALE_IMPORT_ARCHIVE_REVIEW_CSV),
+        "exceptions_csv": relative_label(STALE_IMPORT_ARCHIVE_EXCLUSIONS_CSV),
+        "live_receipt_json": relative_label(live_receipt_path) if live_receipt_path else "",
+        "live_receipt_md": relative_label(live_receipt_md) if live_receipt_md and live_receipt_md.exists() else "",
+        "exception_names": [str(row.get("client_name") or "") for row in exception_rows if row.get("client_name")],
+    }
+
+
+def write_archive_receipt_trail(
+    report: dict[str, Any],
+    path: Path = ARCHIVE_RECEIPT_TRAIL_MD,
+) -> None:
+    trail = report.get("archive_receipt_trail") if isinstance(report.get("archive_receipt_trail"), dict) else build_archive_receipt_trail()
+    lines = [
+        "# FUNDz Archive Receipt Trail",
+        "",
+        f"Generated: {report.get('generated_at', '')}",
+        "",
+        "This is the audit surface for stale-import DF archive work. It proves archive state; it is not an outreach or live-send approval.",
+        "",
+        "## Receipt Summary",
+        f"- Stale-import archive candidates: {trail.get('archive_candidates_total', 0)}",
+        f"- Review rows: {trail.get('review_rows', 0)}",
+        f"- Live DF archive confirmations recorded: {trail.get('live_confirmed', 0)}",
+        f"- Owner exceptions recorded: {trail.get('exceptions', 0)}",
+        f"- Bulk targets still in active bucket: {trail.get('bulk_targets_in_active_bucket', 0)}",
+        f"- Bulk targets visible in archived bucket: {trail.get('bulk_targets_in_archived_bucket', 0)}",
+        "",
+        "## Audit Links",
+        f"- Review packet: `{trail.get('review_path')}`",
+        f"- Review CSV: `{trail.get('review_csv')}`",
+        f"- Exceptions CSV: `{trail.get('exceptions_csv')}`",
+        f"- Live receipt JSON: `{trail.get('live_receipt_json') or 'not found'}`",
+        f"- Live receipt markdown: `{trail.get('live_receipt_md') or 'not found'}`",
+        "",
+        "## Exceptions",
+    ]
+    exception_names = trail.get("exception_names") if isinstance(trail.get("exception_names"), list) else []
+    if not exception_names:
+        lines.append("- No owner exceptions recorded.")
+    for name in exception_names:
+        lines.append(f"- {name}")
+    lines.extend(
+        [
+            "",
+            "## Audit Rule",
+            "- A stale-import row is closed only when the review row, exception row, or authenticated DF receipt is visible here.",
+            "- If a name is not in the receipt trail, do not assume it was archived.",
+        ]
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def write_send_gate_lock(report: dict[str, Any], path: Path = SEND_GATE_LOCK_MD) -> None:
+    safety = report.get("safety_gate") if isinstance(report.get("safety_gate"), dict) else {}
+    next_queue = report.get("next_send_queue") if isinstance(report.get("next_send_queue"), list) else []
+    allowed_now = sum(1 for row in next_queue if str(row.get("send_allowed_now") or "").lower() == "yes")
+    notice_required = sum(
+        1
+        for row in next_queue
+        if "required" in str(row.get("owner_notice_status") or "").lower()
+        or safe_int(row.get("owner_notice_remaining_seconds")) > 0
+    )
+    lines = [
+        "# FUNDz Send Gate Lock",
+        "",
+        f"Generated: {report.get('generated_at', '')}",
+        "",
+        "Preview rows are allowed to exist. Live sends are not allowed unless Brandon intentionally uses owner approval and the two-minute notice gate.",
+        "",
+        "## Lock State",
+        f"- Previewable next-send rows: {len(next_queue)}",
+        f"- Send allowed now: {allowed_now}",
+        f"- Owner notice required or cooling down: {notice_required}",
+        f"- Approval required: {safety.get('approval_required', True)}",
+        f"- Live send allowed: {safety.get('live_send_allowed', False)}",
+        f"- Rollout selected: {safety.get('rollout_selected', 0)}",
+        f"- Queue CSV: `{relative_label(NEXT_SEND_QUEUE_CSV)}`",
+        "",
+        "## Rows",
+    ]
+    if not next_queue:
+        lines.append("- No next-send preview rows.")
+    for row in next_queue:
+        lines.append(
+            f"- #{row.get('queue_rank', '')} | {row.get('client_or_lead', '')} | {row.get('channel', '')} | "
+            f"allowed now {row.get('send_allowed_now', 'no')} | notice {row.get('owner_notice_status', '')} | "
+            f"{row.get('blocked_reason', 'Approval gates still apply.')}"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
 def write_drilldown_csvs(report: dict[str, Any]) -> None:
@@ -2718,10 +3176,11 @@ def write_autofox_migration_checklist(report: dict[str, Any], path: Path = AUTOF
         "- Client (step 09) - Round 3 Score Update: matching Mobile App SMS saved.",
         "- Client (step 11) - Round 4 Score Update: matching Mobile App SMS saved.",
         "- FUNDz App Communication Notice - Email SMS App: SMS, Mobile App SMS, and Email are saved in the instant step.",
+        "- Client (step 04) - Round 1 Sent & Campaign: Credit Tip 01, 02, and 03 delayed steps have saved Mobile App SMS actions and internal note markers.",
         "",
         "## Still Needs Review",
         "- Round 5 through Round 10 score-update campaigns need DF proof before relying on Mobile App SMS coverage.",
-        "- Credit Tip 1 through Credit Tip 20 need DF delayed Mobile App SMS actions saved at 3 and 10 days after each round sent.",
+        "- Credit Tip 04 through Credit Tip 20 still need DF delayed Mobile App SMS actions saved at 3 and 10 days after each round sent.",
         "- Problem/Owner Review internal task actions need DF proof for billing issue, app SMS failed, no app login, no import, no response, duplicate messaging, stale round, and high-touch confusion.",
         "- Any onboarding, reminder, reactivation, billing-warning, cancellation, or custom AutoFox sequence outside the verified list above.",
         "- Any old running workflow where retro-added Mobile App SMS actions remain In-Progress.",
@@ -2785,9 +3244,9 @@ def write_member_experience_system(
             "",
             "## Credit Tip Implementation Status",
             "",
-            "Implementation status: copy is approved locally. DF live saving is still pending because the first new 3-day delayed step returned a DF `Something went wrong` error and the browser session returned to login. Confirm DF delayed-step save behavior before adding these live.",
+            "Implementation status: the DF delayed-step blocker is cleared for the controlled Round 1 template. Credit Tips 01, 02, and 03 are saved with Mobile App SMS actions and internal note markers in `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).",
             "",
-            "Use `Start = Delay`, `Interval Type = Days`, and `Interval Value = 3` or `10` only after DF accepts a safe test save.",
+            "Next controlled target: Credit Tip 04 only. Use the same pattern: one delayed step, one Mobile App SMS action, one internal DF note marker, screenshot proof, and no campaign assignment or manual client send.",
             "",
             "## Credit Tip Schedule",
             "| Tip | Round | Delay | Action name | Topic |",
@@ -3061,6 +3520,155 @@ def write_owner_decision_outputs(report: dict[str, Any]) -> None:
     OWNER_DECISION_PACKET_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def today_decision_for_status(status: str) -> str:
+    if status == "Hold":
+        return "still_hold_until_required_proof"
+    if status == "Needs Brandon":
+        return "owner_decision_needed"
+    if status == "Blocked":
+        return "blocked_until_fix_verified"
+    if status == "Proof Needed":
+        return "attach_proof_before_done"
+    return "review"
+
+
+def build_today_decision_queue(report: dict[str, Any]) -> list[dict[str, str]]:
+    statuses = {"Hold", "Needs Brandon", "Blocked", "Proof Needed"}
+    rows: list[dict[str, str]] = []
+    for row in report.get("work_queue", []):
+        status = str(row.get("queue_status") or "")
+        if status not in statuses:
+            continue
+        rows.append(
+            {
+                "queue_status": status,
+                "decision": today_decision_for_status(status),
+                "owner": str(row.get("owner") or "Brandon"),
+                "lane": str(row.get("lane") or ""),
+                "client_name": str(row.get("client_name") or ""),
+                "next_step": str(row.get("next_step") or ""),
+                "proof_required": str(row.get("proof_required") or ""),
+                "evidence": str(row.get("evidence") or ""),
+                "priority_score": str(row.get("priority_score") or ""),
+                "work_order_id": str(row.get("work_order_id") or ""),
+            }
+        )
+    status_order = {"Blocked": 0, "Proof Needed": 1, "Needs Brandon": 2, "Hold": 3}
+    return sorted(
+        rows,
+        key=lambda item: (
+            status_order.get(item["queue_status"], 9),
+            -safe_int(item.get("priority_score")),
+            item.get("client_name", "").lower(),
+        ),
+    )
+
+
+def write_today_operating_board(report: dict[str, Any], path: Path = TODAY_OPERATING_BOARD_MD) -> None:
+    safety = report.get("safety_gate") if isinstance(report.get("safety_gate"), dict) else {}
+    maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
+    decisions = build_today_decision_queue(report)
+    next_queue = report.get("next_send_queue", [])
+    approval_required = "yes" if safety.get("approval_required") else "no"
+    live_send_allowed = "yes" if safety.get("live_send_allowed") else "no"
+    selected = safety.get("rollout_selected", 0)
+    maintenance_decisions = maintenance.get("billing_decisions") if isinstance(maintenance.get("billing_decisions"), dict) else {}
+    active_urgent = maintenance_decisions.get("active_urgent_billing_review", 0)
+    duplicate_review = maintenance.get("duplicate_review_clients", 0)
+    bounced_routes = maintenance.get("bounced_contact_routes", 0)
+
+    lines = [
+        "# FUNDz Today Operating Board",
+        "",
+        f"Generated: {report.get('generated_at')}",
+        "",
+        "Objective: operate the queue from one surface today. Do not keep re-proving the same safety state unless this board goes stale or a live action is requested.",
+        "",
+        "## Safety Gate Tile",
+        f"- State: {safety.get('state', 'Local reporting only')}",
+        f"- Last check: {safety.get('generated_at', 'not recorded')}",
+        f"- Steps: {safety.get('successful_steps', 0)}/{safety.get('total_steps', 0)}; maintenance: {safety.get('maintenance_steps', '0/0')}",
+        f"- Approval required: {approval_required}",
+        f"- Live send allowed: {live_send_allowed}",
+        f"- Rollout selected: {selected}",
+        f"- Runtime quiet: {'yes' if safety.get('runtime_quiet') else 'no'}",
+        f"- Status file: `{safety.get('status_path', relative_label(AUTONOMY_STATUS_MD))}`",
+        f"- Meaning: {safety.get('note', 'Client sends remain off; use this as local reporting only.')}",
+        "",
+        "## Today’s Top 3",
+        f"1. Clear or label the {len(decisions)} hold/attention item(s): keep hold, attach proof, assign an owner, or record the exact next step.",
+        f"2. Work maintenance without reopening outreach: urgent billing reviews {active_urgent}, bounced routes {bounced_routes}, duplicate-review clients {duplicate_review}.",
+        "3. For LOGIC/Governor changes, require the live-visible smoke test or Sheet approval in the first instruction before calling anything done.",
+        "",
+        "## Waiting On Brandon",
+    ]
+    if not decisions:
+        lines.append("- No Brandon hold/attention items are pending in the local work queue.")
+    for row in decisions[:20]:
+        lines.append(
+            f"- {row['client_name'] or row['work_order_id']} | {row['queue_status']} | {row['decision']} | "
+            f"{row['next_step']} Proof: {row['proof_required']} Evidence: `{row['evidence']}`"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Waiting On Lucy / Jay",
+            "- Daily closeout must come through `/workorder` with status, summary, next step, owner, due date, and proof. If proof is missing, do not mark done.",
+            "- Use LOGIC for dispute questions only after the Slack-visible behavior is proven in the live surface they will use.",
+            "",
+            "## Blocked By Auth / Approval",
+            "- Google Sheet updates: if a Drive batch approval is pending, approve or cancel it before asking Codex to recreate the same rows.",
+            "- Slack browser tests: auth/code prompts are blockers; do not call a LOGIC change finished until the visible Slack smoke test passes.",
+            "- Command Center runtime: allowed dashboard/reporting runtime may be awake; live-send runtime is still blocked unless the safety tile says otherwise.",
+            "",
+            "## Done With Proof",
+            f"- Command Center generated: `{relative_label(COMMAND_CENTER_MD)}`",
+            f"- Maintenance status: `{safety.get('maintenance_status_path', relative_label(MAINTENANCE_AUTOPILOT_STATUS_MD))}`",
+            f"- Billing maintenance focus: `{relative_label(BILLING_MAINTENANCE_FOCUS_MD)}`",
+            f"- Archive receipt trail: `{relative_label(ARCHIVE_RECEIPT_TRAIL_MD)}`",
+            f"- Send gate lock: `{relative_label(SEND_GATE_LOCK_MD)}`",
+            f"- Next-send queue rows: {len(next_queue)}; allowed now: {sum(1 for row in next_queue if row.get('send_allowed_now') == 'yes')}",
+            f"- Today decision queue CSV: `{relative_label(TODAY_DECISION_QUEUE_CSV)}`",
+            "",
+            "## Work-Order Prompt Format",
+            "- System: FUNDZ, LOGIC, Governor, GHL Agent, or My Day to Day.",
+            "- Exact goal: one sentence with the finish line.",
+            "- Proof required: screenshot, receipt path, live smoke test, Sheet row, or test output.",
+            "- Do not touch: live sends, CRM edits, Slack sends, billing changes, or anything else outside the lane.",
+            "- Report to: Today Board, Work Orders sheet, Slack, local file, or final answer.",
+            "- Acceptance: what must be visible before the task is called done.",
+        ]
+    )
+
+    findings = safety.get("safety_findings") if isinstance(safety.get("safety_findings"), list) else []
+    lines.extend(["", "## Safety Findings To Avoid Re-Checking"])
+    if findings:
+        for finding in findings:
+            lines.append(f"- {finding}")
+    else:
+        lines.append("- None in the last available autonomy status.")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    write_dict_csv(
+        TODAY_DECISION_QUEUE_CSV,
+        decisions,
+        [
+            "queue_status",
+            "decision",
+            "owner",
+            "lane",
+            "client_name",
+            "next_step",
+            "proof_required",
+            "evidence",
+            "priority_score",
+            "work_order_id",
+        ],
+    )
+
+
 def write_gap_closure_plan(report: dict[str, Any], path: Path = GAP_CLOSURE_MD) -> None:
     lines = [
         "# FUNDz Gap Closure Plan",
@@ -3332,7 +3940,7 @@ def write_send_visibility(report: dict[str, Any], path: Path = SEND_VISIBILITY_M
     sent_counts = Counter(str(row.get("channel") or "Unknown") for row in ledger if str(row.get("status") or "").lower() == "sent")
     queue_counts = Counter(str(row.get("send_allowed_now") or "no") for row in next_queue)
     lines = [
-        "# FUNDz Send Visibility Command Center",
+        "# A FUND Solution Send Visibility Board",
         "",
         f"Generated: {report.get('generated_at')}",
         "",
@@ -3423,7 +4031,7 @@ def write_send_visibility(report: dict[str, Any], path: Path = SEND_VISIBILITY_M
 def write_daily_board(report: dict[str, Any], path: Path = DAILY_BOARD_MD) -> None:
     board = report.get("daily_board", [])
     lines = [
-        "# FUNDz Daily Board",
+        "# A FUND Solution Daily Board",
         "",
         f"Generated: {report.get('generated_at')}",
         "",
@@ -3552,7 +4160,7 @@ def write_communication_control_board(
 
 def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> None:
     lines = [
-        "# FUNDz Command Center",
+        "# A FUND Solution Command Center",
         "",
         f"Generated: {report.get('generated_at')}",
         "",
@@ -3567,20 +4175,50 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Action queue: {summary.get('action_counts', {})}",
             f"- Work Queue CSV: {relative_label(WORK_QUEUE_CSV)}",
             f"- Google Sheet import CSV: {relative_label(WORK_QUEUE_SHEET_IMPORT_CSV)}",
+            f"- Today operating board: {relative_label(TODAY_OPERATING_BOARD_MD)}",
+            f"- Today decision queue: {relative_label(TODAY_DECISION_QUEUE_CSV)}",
             f"- Daily board: {relative_label(DAILY_BOARD_MD)}",
             f"- Client communication control board: {relative_label(COMMUNICATION_CONTROL_BOARD_MD)}",
-            f"- Send visibility command center: {relative_label(SEND_VISIBILITY_MD)}",
+            f"- Send visibility board: {relative_label(SEND_VISIBILITY_MD)}",
             f"- Next send queue CSV: {relative_label(NEXT_SEND_QUEUE_CSV)}",
             f"- Send kill switch: {relative_label(SEND_KILL_SWITCH_MD)}",
+            f"- Send gate lock: {relative_label(SEND_GATE_LOCK_MD)}",
+            f"- Billing maintenance focus: {relative_label(BILLING_MAINTENANCE_FOCUS_MD)}",
+            f"- Archive receipt trail: {relative_label(ARCHIVE_RECEIPT_TRAIL_MD)}",
             f"- Billing rollout triage: {relative_label(BILLING_ROLLOUT_TRIAGE_MD)}",
             f"- Clean backup preview candidates: {relative_label(CLEAN_BACKUP_PREVIEW_MD)}",
             f"- Governor safe-fix report: {relative_label(GOVERNOR_SAFE_FIXES_MD)}",
+            "",
+            "## Operating Map",
+            "- A FUND Solution has one Command Center. FUNDz is a source workspace/workflow feeding local evidence, billing, archive, and message-readiness outputs.",
+            f"- Open first: {relative_label(TODAY_OPERATING_BOARD_MD)} for the current lane.",
+            f"- Do the work: {relative_label(WORK_QUEUE_CSV)} for owner, next step, due date, proof, and evidence.",
+            f"- Billing decisions: {relative_label(BILLING_MAINTENANCE_FOCUS_MD)} and `data/local/maintenance-cleanup/fundz-lucy-billing-workqueue.md`.",
+            f"- Message receipts and gates: {relative_label(SEND_VISIBILITY_MD)}. It shows what happened and what is gated; it does not approve sends.",
+            f"- Preview-only messages: {relative_label(NEXT_SEND_QUEUE_CSV)}. These rows are not permission to send.",
             "",
             "## Daily Board",
         ]
     )
     for item in report.get("daily_board", []):
         lines.append(f"- {item.get('label')}: {item.get('value')}")
+    safety = report.get("safety_gate") if isinstance(report.get("safety_gate"), dict) else {}
+    lines.extend(
+        [
+            "",
+            "## Safety Gate Tile",
+            f"- State: {safety.get('state', 'Local reporting only')}",
+            f"- Last check: {safety.get('generated_at', 'not recorded')}",
+            f"- Steps: {safety.get('successful_steps', 0)}/{safety.get('total_steps', 0)}; maintenance: {safety.get('maintenance_steps', '0/0')}",
+            f"- Approval required: {safety.get('approval_required', True)}",
+            f"- Live send allowed: {safety.get('live_send_allowed', False)}",
+            f"- Rollout selected: {safety.get('rollout_selected', 0)}",
+            f"- Runtime quiet: {safety.get('runtime_quiet', False)}",
+            f"- Allowed reporting runtime: {safety.get('allowed_reporting_runtime', False)}",
+            f"- Unexpected runtime processes: {len(safety.get('unexpected_runtime_processes', [])) if isinstance(safety.get('unexpected_runtime_processes'), list) else 0}",
+            f"- Meaning: {safety.get('note', 'Client sends remain off; use this as local reporting only.')}",
+        ]
+    )
     kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
     next_queue = report.get("next_send_queue", [])
     lines.extend(
@@ -3594,6 +4232,29 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Next-send gated now: {sum(1 for row in next_queue if row.get('send_allowed_now') != 'yes')}",
             f"- Owner text notice: {next_queue[0].get('owner_notice_status') if next_queue else 'not_applicable'}",
             f"- Owner view: {relative_label(SEND_VISIBILITY_MD)}",
+            f"- Gate lock: {relative_label(SEND_GATE_LOCK_MD)}",
+        ]
+    )
+    maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
+    billing_decisions = maintenance.get("billing_decisions") if isinstance(maintenance.get("billing_decisions"), dict) else {}
+    archive_trail = report.get("archive_receipt_trail") if isinstance(report.get("archive_receipt_trail"), dict) else {}
+    lines.extend(
+        [
+            "",
+            "## Billing Maintenance",
+            f"- Urgent billing review: {billing_decisions.get('active_urgent_billing_review', 0)}",
+            f"- Date-sensitive billing reviews: {billing_decisions.get('active_date_sensitive_billing_review', 0)}",
+            f"- Standard billing reviews: {billing_decisions.get('active_standard_billing_review', 0)}",
+            f"- Missing billing dates: {billing_decisions.get('fix_missing_billing_date', 0)}",
+            f"- Duplicate-review clients: {maintenance.get('duplicate_review_clients', billing_decisions.get('duplicate_review_once', 0))}",
+            f"- Owner-updated billing clients moved out: {maintenance.get('owner_updated_billing_clients', 0)}",
+            f"- Focus board: {relative_label(BILLING_MAINTENANCE_FOCUS_MD)}",
+            "",
+            "## Archive Receipt Trail",
+            f"- Live DF archive confirmations recorded: {archive_trail.get('live_confirmed', 0)}",
+            f"- Owner exceptions recorded: {archive_trail.get('exceptions', 0)}",
+            f"- Active bucket remaining: {archive_trail.get('bulk_targets_in_active_bucket', 0)}",
+            f"- Audit board: {relative_label(ARCHIVE_RECEIPT_TRAIL_MD)}",
         ]
     )
     queue_counts = Counter(str(row.get("queue_status") or "Unknown") for row in report.get("work_queue", []))
@@ -4050,12 +4711,16 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
     write_contact_ledger(report.get("ledger", []), CONTACT_LEDGER_CSV)
     write_work_queue_outputs(report)
     write_daily_board(report, DAILY_BOARD_MD)
+    write_today_operating_board(report, TODAY_OPERATING_BOARD_MD)
     write_governor_safe_fixes(report, GOVERNOR_SAFE_FIXES_MD)
     write_communication_control_board(report, COMMUNICATION_CONTROL_BOARD_MD, COMMUNICATION_CONTROL_BOARD_CSV)
     write_send_kill_switch_status(report, SEND_KILL_SWITCH_MD)
     write_send_visibility(report, SEND_VISIBILITY_MD)
     write_dict_csv(SEND_LEDGER_CSV, report.get("send_ledger", []), SEND_LEDGER_FIELDS)
     write_dict_csv(NEXT_SEND_QUEUE_CSV, report.get("next_send_queue", []), NEXT_SEND_QUEUE_FIELDS)
+    write_billing_maintenance_focus(report, BILLING_MAINTENANCE_FOCUS_MD, BILLING_MAINTENANCE_FOCUS_CSV)
+    write_archive_receipt_trail(report, ARCHIVE_RECEIPT_TRAIL_MD)
+    write_send_gate_lock(report, SEND_GATE_LOCK_MD)
     write_markdown(report, COMMAND_CENTER_MD)
     write_pilot_report(report, PILOT_REPORT_MD)
     write_weekly_summary(report, WEEKLY_SUMMARY_MD)
@@ -4080,6 +4745,8 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
     return {
         "json": relative_label(COMMAND_CENTER_JSON),
         "markdown": relative_label(COMMAND_CENTER_MD),
+        "today_operating_board": relative_label(TODAY_OPERATING_BOARD_MD),
+        "today_decision_queue": relative_label(TODAY_DECISION_QUEUE_CSV),
         "daily_board": relative_label(DAILY_BOARD_MD),
         "work_queue": relative_label(WORK_QUEUE_CSV),
         "work_queue_sheet_import": relative_label(WORK_QUEUE_SHEET_IMPORT_CSV),
@@ -4112,6 +4779,10 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
         "missing_steps_recheck": relative_label(MISSING_STEPS_RECHECK_MD),
         "billing_rollout_triage": relative_label(BILLING_ROLLOUT_TRIAGE_MD),
         "billing_rollout_triage_csv": relative_label(BILLING_ROLLOUT_TRIAGE_CSV),
+        "billing_maintenance_focus": relative_label(BILLING_MAINTENANCE_FOCUS_MD),
+        "billing_maintenance_focus_csv": relative_label(BILLING_MAINTENANCE_FOCUS_CSV),
+        "archive_receipt_trail": relative_label(ARCHIVE_RECEIPT_TRAIL_MD),
+        "send_gate_lock": relative_label(SEND_GATE_LOCK_MD),
         "clean_backup_preview": relative_label(CLEAN_BACKUP_PREVIEW_MD),
         "clean_backup_preview_csv": relative_label(CLEAN_BACKUP_PREVIEW_CSV),
         "business_review_rollout": relative_label(BUSINESS_REVIEW_ROLLOUT_MD),
@@ -4134,9 +4805,11 @@ def main() -> None:
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
         return
-    print("FUNDz command center built.")
+    print("A FUND Solution Command Center built from the FUNDz workspace.")
     print(f"- Markdown: {paths['markdown']}")
     print(f"- JSON: {paths['json']}")
+    print(f"- Today operating board: {paths['today_operating_board']}")
+    print(f"- Today decision queue: {paths['today_decision_queue']}")
     print(f"- Daily board: {paths['daily_board']}")
     print(f"- Work queue: {paths['work_queue']}")
     print(f"- Google Sheet import: {paths['work_queue_sheet_import']}")
@@ -4144,7 +4817,7 @@ def main() -> None:
     print(f"- Governor alerts: {paths['governor_alerts']}")
     print(f"- Communication control board: {paths['communication_control_board']}")
     print(f"- Communication control board CSV: {paths['communication_control_board_csv']}")
-    print(f"- Send visibility command center: {paths['send_visibility']}")
+    print(f"- Send visibility board: {paths['send_visibility']}")
     print(f"- Send ledger CSV: {paths['send_ledger_csv']}")
     print(f"- Next send queue CSV: {paths['next_send_queue_csv']}")
     print(f"- Send kill switch: {paths['send_kill_switch']}")
@@ -4169,6 +4842,10 @@ def main() -> None:
     print(f"- Missing steps recheck: {paths['missing_steps_recheck']}")
     print(f"- Billing rollout triage: {paths['billing_rollout_triage']}")
     print(f"- Billing rollout triage CSV: {paths['billing_rollout_triage_csv']}")
+    print(f"- Billing maintenance focus: {paths['billing_maintenance_focus']}")
+    print(f"- Billing maintenance focus CSV: {paths['billing_maintenance_focus_csv']}")
+    print(f"- Archive receipt trail: {paths['archive_receipt_trail']}")
+    print(f"- Send gate lock: {paths['send_gate_lock']}")
     print(f"- Clean backup preview candidates: {paths['clean_backup_preview']}")
     print(f"- Clean backup preview candidates CSV: {paths['clean_backup_preview_csv']}")
     print(f"- Business review + controlled rollout: {paths['business_review_rollout']}")
