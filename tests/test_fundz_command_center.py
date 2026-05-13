@@ -105,6 +105,9 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertIn("no_approval_work_queue", report)
         self.assertIn("customer_service_readiness", report)
         self.assertIn("broad autonomous replies blocked", report["customer_service_readiness"]["state"])
+        self.assertIn("broad_autonomous_rollout_gate", report)
+        self.assertFalse(report["broad_autonomous_rollout_gate"]["mode_enabled"])
+        self.assertEqual(report["broad_autonomous_rollout_gate"]["current_cap"], "0 broad autonomous replies.")
 
     def test_pilot_status_report_reads_provider_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -226,6 +229,7 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "GAP_CLOSURE_MD": base / "gaps.md",
                 "MISSING_STEPS_RECHECK_MD": base / "missing.md",
                 "BUSINESS_REVIEW_ROLLOUT_MD": base / "business-rollout.md",
+                "BROAD_AUTONOMOUS_ROLLOUT_GATE_MD": base / "broad-rollout-gate.md",
                 "PREVIEW_PACKET_DECISION_MD": base / "preview-decision.md",
                 "BILLING_ROLLOUT_TRIAGE_MD": base / "billing-triage.md",
                 "BILLING_ROLLOUT_TRIAGE_CSV": base / "billing-triage.csv",
@@ -274,6 +278,7 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertTrue((base / "gaps.md").exists())
             self.assertTrue((base / "missing.md").exists())
             self.assertTrue((base / "business-rollout.md").exists())
+            self.assertTrue((base / "broad-rollout-gate.md").exists())
             self.assertTrue((base / "preview-decision.md").exists())
             self.assertTrue((base / "billing-triage.md").exists())
             self.assertTrue((base / "billing-triage.csv").exists())
@@ -290,6 +295,7 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("owner-actions.md", paths["owner_review_actions"])
             self.assertIn("no-recent-investigation.md", paths["no_recent_contact_investigation"])
             self.assertIn("business-rollout.md", paths["business_review_rollout"])
+            self.assertIn("broad-rollout-gate.md", paths["broad_autonomous_rollout_gate"])
             self.assertIn("preview-decision.md", paths["preview_packet_decision"])
             self.assertIn("billing-triage.md", paths["billing_rollout_triage"])
             self.assertIn("billing-maintenance.md", paths["billing_maintenance_focus"])
@@ -1480,6 +1486,17 @@ class FundzCommandCenterTests(unittest.TestCase):
                         "owner_roundtrip_receipts": ["data/local/semi-autonomous/receipts/brandon-jordan-df-portal-reply-proof-20260513.md"],
                     },
                 },
+                "broad_autonomous_rollout_gate": {
+                    "state": "blocked_not_enabled",
+                    "mode_enabled": False,
+                    "scope": "Customer-service app/portal replies only.",
+                    "current_cap": "0 broad autonomous replies.",
+                    "next_controlled_cap": "1 named client, 1 app/portal inbound, 1 exact approved reply, 1 receipt.",
+                    "first_client_proof_required": ["Named client and owner approval for that exact client before live action."],
+                    "expansion_rules": ["After one clean third-party proof, the next cap is 3 named clients."],
+                    "rollback_or_park": ["Run `make inactive` to park local live runtimes."],
+                    "still_blocks_broad_mode": ["No explicit Brandon approval exists for broad autonomous third-party replies."],
+                },
             }
 
             command_center.write_markdown(report, path)
@@ -1499,6 +1516,31 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("## Customer-Service Live Reply Gate", text)
             self.assertIn("Broad autonomous replies: blocked", text)
             self.assertIn("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true", text)
+            self.assertIn("## Broad Autonomous Rollout Gate", text)
+            self.assertIn("Broad mode enabled: False", text)
+            self.assertIn("Current cap: 0 broad autonomous replies", text)
+            self.assertIn("Next controlled cap: 1 named client", text)
+            self.assertIn("Rollback / park: `make inactive`", text)
+
+    def test_broad_autonomous_rollout_gate_file_keeps_broad_mode_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "broad-rollout-gate.md"
+            report = {
+                "generated_at": "2026-05-13T12:00:00-0500",
+                "broad_autonomous_rollout_gate": command_center.build_broad_autonomous_rollout_gate(),
+            }
+
+            command_center.write_broad_autonomous_rollout_gate(report, path)
+
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("Broad autonomous mode is not enabled", text)
+            self.assertIn("Current cap: 0 broad autonomous replies", text)
+            self.assertIn("Next controlled cap: 1 named client", text)
+            self.assertIn("## First-Client Proof Requirements", text)
+            self.assertIn("## Expansion Rules", text)
+            self.assertIn("## Rollback / Park Command", text)
+            self.assertIn("Run `make inactive`", text)
+            self.assertIn("## Still Blocks Broad Mode", text)
 
     def test_daily_board_outputs_exactly_five_lines(self) -> None:
         report = {

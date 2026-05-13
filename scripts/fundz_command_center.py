@@ -61,6 +61,7 @@ GAP_CLOSURE_MD = OUTPUT_DIR / "fundz-gap-closure-plan.md"
 NO_APPROVAL_WORK_CSV = OUTPUT_DIR / "fundz-no-approval-work-queue.csv"
 MISSING_STEPS_RECHECK_MD = OUTPUT_DIR / "fundz-missing-steps-recheck.md"
 BUSINESS_REVIEW_ROLLOUT_MD = OUTPUT_DIR / "fundz-business-review-controlled-rollout.md"
+BROAD_AUTONOMOUS_ROLLOUT_GATE_MD = OUTPUT_DIR / "fundz-broad-autonomous-rollout-gate.md"
 PREVIEW_PACKET_DECISION_MD = OUTPUT_DIR / "fundz-preview-packet-decision.md"
 BILLING_ROLLOUT_TRIAGE_MD = OUTPUT_DIR / "fundz-billing-rollout-triage.md"
 BILLING_ROLLOUT_TRIAGE_CSV = OUTPUT_DIR / "fundz-billing-rollout-triage.csv"
@@ -472,11 +473,94 @@ def build_customer_service_readiness() -> dict[str, Any]:
         "proof": {
             "readiness_packet": relative_label(CUSTOMER_SERVICE_READINESS_MD) if readiness_packet_exists else "",
             "production_routing": relative_label(CUSTOMER_SERVICE_PRODUCTION_PROOF_MD) if production_routing_proven else "",
+            "broad_rollout_gate": relative_label(BROAD_AUTONOMOUS_ROLLOUT_GATE_MD),
             "client_side_app_proof": relative_label(APP_PORTAL_CLIENT_SIDE_PROOF_MD) if APP_PORTAL_CLIENT_SIDE_PROOF_MD.exists() else "",
             "owner_roundtrip_proven": owner_roundtrip_proven,
             "owner_roundtrip_receipts": [relative_label(path) for path in owner_roundtrip_paths if path.exists()],
             "manual_or_api_app_portal_events": len(manual_or_api_proof_rows),
             "manual_or_api_event_proof": relative_label(APP_PORTAL_EVENT_PROOF_JSONL) if manual_or_api_proof_rows else "",
+        },
+    }
+
+
+def build_broad_autonomous_rollout_gate() -> dict[str, Any]:
+    return {
+        "state": "blocked_not_enabled",
+        "mode_enabled": False,
+        "recommended_candidate": "Erika Jordan",
+        "candidate_reason": (
+            "Cleanest local real-client evidence: app installed/logged in and prior admin-side App Message visibility proof. "
+            "Must be refreshed read-only before contact."
+        ),
+        "scope": (
+            "Customer-service app/portal replies only. Excludes billing, cancellation, complaint, "
+            "document request, app-access, score, dispute-update, campaign assignment, DF/AutoFox edits, "
+            "billing edits, and broad outreach sends."
+        ),
+        "current_cap": "0 broad autonomous replies.",
+        "next_controlled_cap": "1 named client, 1 app/portal inbound, 1 exact approved reply, 1 receipt.",
+        "excluded_candidates": [
+            "Henry Fisher Sr. - archived/payment-failed warning in May 13 read-only preflight.",
+            "James Hawkins - archived and app only Invitation Sent in May 13 read-only preflight.",
+            "Anthony Williams - installed/logged in but prior proof does not approve retry or rollout.",
+            "Any billing, cancellation, complaint, document, app-access, score, or dispute-update row.",
+            "Any DND, opt-out, no-recent-contact exception, billing-risk, duplicate-risk, or owner-review client.",
+        ],
+        "approval_required": [
+            "Named client.",
+            "Exact inbound app/portal source to watch.",
+            "Exact reply copy or approved reply category.",
+            "Exact action window.",
+            "Explicit cap of 1 reply.",
+        ],
+        "runtime_wake_proof": [
+            "Run `make inactive` first if any unexpected runtime is awake.",
+            "Wake only the named bridge/tunnel/poller path needed for the approved test.",
+            "Verify local and public health during the wake.",
+            "Run `make webhook-probe` if webhook path is used.",
+            "Confirm command-center kill switch is off only for the approved window.",
+            "Confirm `CREDIT_TRACKER_DRY_RUN=false` only for the approved window.",
+            "Confirm `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true` or `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true`, not both unless both paths are intentionally in scope.",
+        ],
+        "first_client_proof_required": [
+            "Named client and owner approval for that exact client before live action.",
+            "Fresh app/portal inbound proof from API, webhook, or manual import with message type/source/channel preserved.",
+            "Exact reply copy approved before send.",
+            "Dry-run intentionally disabled only for the approved action window.",
+            "Command-center kill switch confirmed off before the send and available for rollback.",
+            "No sensitive/proof-dependent labels: billing, cancellation, complaint, document request, app access, score concern, or dispute update.",
+            "Successful HighLevel/app reply receipt written to `data/local/highlevel-inbox-poller/reply-receipts.jsonl`.",
+            "Client-side or admin-side visibility proof captured after the reply.",
+            "Post-send review shows zero duplicate sends, failed sends, or unexpected runtime findings.",
+        ],
+        "expansion_rules": [
+            "Do not expand from Brandon owner-side proof alone; first third-party client proof is still required.",
+            "After one clean third-party proof, the next cap is 3 named clients, owner-approved one by one, with receipts for each.",
+            "After three clean third-party receipts, the next cap is 5 named clients in one business-day window; no overnight or after-hours expansion.",
+            "Any sensitive label, failed receipt, duplicate, complaint, billing/payment issue, app-access confusion, score/dispute question, or runtime finding stops expansion.",
+            "Broad autonomous mode remains disabled until Brandon explicitly approves broad mode after reviewing the capped receipts and rollback proof.",
+        ],
+        "rollback_or_park": [
+            "Run `make inactive` to park local live runtimes.",
+            "Turn on `data/local/command-center/fundz-send-kill-switch.json` if any live-send risk appears.",
+            "Unset `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED` and `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED` after the approved action window.",
+            "Regenerate `make command-center` and confirm the Safety Gate shows live sends disabled and rollout selected 0.",
+        ],
+        "still_blocks_broad_mode": [
+            "No explicit Brandon approval exists for broad autonomous third-party replies.",
+            "No clean third-party first-client customer-service reply receipt has been captured from this gate.",
+            "Proof-dependent reply classes still require owner or verified-context review.",
+            "Live bridge, webhook, and poller runtimes are parked by default.",
+            "Rollback proof must stay visible before any capped expansion.",
+        ],
+        "proof_links": {
+            "readiness_packet": relative_label(CUSTOMER_SERVICE_READINESS_MD),
+            "production_routing": relative_label(CUSTOMER_SERVICE_PRODUCTION_PROOF_MD),
+            "controlled_live_gate": relative_label(OUTPUT_DIR / "fundz-controlled-live-reply-gate-closeout-2026-05-13.md"),
+            "app_portal_event_proof": relative_label(APP_PORTAL_EVENT_PROOF_JSONL),
+            "reply_receipts": relative_label(HIGHLEVEL_REPLY_RECEIPTS_JSONL),
+            "kill_switch": relative_label(SEND_KILL_SWITCH_JSON),
+            "safety_status": relative_label(AUTONOMY_STATUS_MD),
         },
     }
 
@@ -2883,6 +2967,7 @@ def build_command_center(limit: int = 10) -> dict[str, Any]:
         "receipts": receipt_summary(),
         "safety_gate": build_safety_gate_snapshot(),
         "customer_service_readiness": build_customer_service_readiness(),
+        "broad_autonomous_rollout_gate": build_broad_autonomous_rollout_gate(),
         "send_kill_switch": kill_switch,
         "send_ledger": send_ledger,
         "next_send_queue": next_send_queue,
@@ -4321,6 +4406,7 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Archive receipt trail: {relative_label(ARCHIVE_RECEIPT_TRAIL_MD)}",
             f"- Billing rollout triage: {relative_label(BILLING_ROLLOUT_TRIAGE_MD)}",
             f"- Clean backup preview candidates: {relative_label(CLEAN_BACKUP_PREVIEW_MD)}",
+            f"- Broad autonomous rollout gate: {relative_label(BROAD_AUTONOMOUS_ROLLOUT_GATE_MD)}",
             f"- Governor safe-fix report: {relative_label(GOVERNOR_SAFE_FIXES_MD)}",
             "",
             "## Operating Map",
@@ -4330,6 +4416,7 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Billing decisions: {relative_label(BILLING_MAINTENANCE_FOCUS_MD)} and `data/local/maintenance-cleanup/fundz-lucy-billing-workqueue.md`.",
             f"- Message receipts and gates: {relative_label(SEND_VISIBILITY_MD)}. It shows what happened and what is gated; it does not approve sends.",
             f"- Preview-only messages: {relative_label(NEXT_SEND_QUEUE_CSV)}. These rows are not permission to send.",
+            f"- Broad autonomous mode: {relative_label(BROAD_AUTONOMOUS_ROLLOUT_GATE_MD)} shows the cap, proof ladder, rollback command, and blockers. It does not enable broad mode.",
             "",
             "## Daily Board",
         ]
@@ -4415,11 +4502,37 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             "## Customer-Service Live Reply Gate",
             "- Broad autonomous replies: blocked.",
             "- Controlled live reply path: code-ready for one approved non-sensitive app/portal reply only.",
+            "- Runtime wake proof: run `make runtime-wake-checklist` first; it writes `data/local/command-center/fundz-runtime-wake-proof-checklist.md` without waking bridge, tunnel, poller, webhook, or sends.",
             "- Required controls: `CREDIT_TRACKER_DRY_RUN=false`, `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true`, kill switch off, business-hours window or explicit after-hours override, app/portal proof signal, no sensitive/proof-dependent labels, and reply receipt logging.",
             "- Still held for owner review: billing, cancellation, complaints, document requests, app access, score concerns, and dispute updates.",
             "- Proof path: `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` before the live gate and `data/local/highlevel-inbox-poller/reply-receipts.jsonl` after a successful approved reply.",
         ]
     )
+    rollout_gate = report.get("broad_autonomous_rollout_gate") if isinstance(report.get("broad_autonomous_rollout_gate"), dict) else {}
+    lines.extend(
+        [
+            "",
+            "## Broad Autonomous Rollout Gate",
+            f"- State: {rollout_gate.get('state', 'blocked_not_enabled')}",
+            f"- Broad mode enabled: {rollout_gate.get('mode_enabled', False)}",
+            f"- Scope: {rollout_gate.get('scope', 'Customer-service app/portal replies only; broad mode blocked.')}",
+            f"- Current cap: {rollout_gate.get('current_cap', '0 broad autonomous replies.')}",
+            f"- Next controlled cap: {rollout_gate.get('next_controlled_cap', '1 named client only.')}",
+            f"- Recommended first candidate: {rollout_gate.get('recommended_candidate', 'none selected')}",
+            f"- Rollback / park: `make inactive`",
+            f"- Full gate surface: {relative_label(BROAD_AUTONOMOUS_ROLLOUT_GATE_MD)}",
+            "",
+            "### First-Client Proof Required",
+        ]
+    )
+    for item in rollout_gate.get("first_client_proof_required", []) or []:
+        lines.append(f"- {item}")
+    lines.extend(["", "### Expansion Rules"])
+    for item in rollout_gate.get("expansion_rules", []) or []:
+        lines.append(f"- {item}")
+    lines.extend(["", "### Still Blocks Broad Mode"])
+    for item in rollout_gate.get("still_blocks_broad_mode", []) or []:
+        lines.append(f"- {item}")
     maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
     billing_decisions = maintenance.get("billing_decisions") if isinstance(maintenance.get("billing_decisions"), dict) else {}
     archive_trail = report.get("archive_receipt_trail") if isinstance(report.get("archive_receipt_trail"), dict) else {}
@@ -4801,6 +4914,102 @@ def write_business_review_controlled_rollout(report: dict[str, Any], path: Path 
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
+def write_broad_autonomous_rollout_gate(report: dict[str, Any], path: Path = BROAD_AUTONOMOUS_ROLLOUT_GATE_MD) -> None:
+    gate = report.get("broad_autonomous_rollout_gate") if isinstance(report.get("broad_autonomous_rollout_gate"), dict) else {}
+    lines = [
+        "# FUNDz Broad Autonomous Rollout Gate",
+        "",
+        f"Generated: {report.get('generated_at', '')}",
+        "",
+        "## Decision",
+        "- Broad autonomous mode is not enabled.",
+        "- This surface defines the proof ladder required before any future expansion.",
+        "",
+        "## Scope And Cap",
+        f"- State: {gate.get('state', 'blocked_not_enabled')}",
+        f"- Broad mode enabled: {gate.get('mode_enabled', False)}",
+        f"- Scope: {gate.get('scope', '')}",
+        f"- Current cap: {gate.get('current_cap', '0 broad autonomous replies.')}",
+        f"- Next controlled cap: {gate.get('next_controlled_cap', '1 named client only.')}",
+        "",
+        "## Recommended First Candidate",
+        f"- Candidate: {gate.get('recommended_candidate', 'none selected')}",
+        f"- Reason: {gate.get('candidate_reason', 'No candidate reason recorded.')}",
+        "- This is a local proof recommendation only; it does not authorize contact or send.",
+        "",
+        "## Exclusions",
+    ]
+    for item in gate.get("excluded_candidates", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("excluded_candidates"):
+        lines.append("- Billing, cancellation, complaint, app-access, score, dispute, DND, opt-out, duplicate-risk, and owner-review rows are excluded.")
+
+    lines.extend(
+        [
+            "",
+            "## Approval Required Before First Live Reply",
+        ]
+    )
+    for item in gate.get("approval_required", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("approval_required"):
+        lines.append("- Named client, source, copy, action window, and cap must be approved.")
+
+    lines.extend(
+        [
+            "",
+            "## Runtime Wake Proof",
+        ]
+    )
+    for item in gate.get("runtime_wake_proof", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("runtime_wake_proof"):
+        lines.append("- No runtime should be awake until the exact approved action window.")
+
+    lines.extend(
+        [
+        "",
+        "## First-Client Proof Requirements",
+        ]
+    )
+    for item in gate.get("first_client_proof_required", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("first_client_proof_required"):
+        lines.append("- Owner approval, app/portal proof, exact copy, receipt, and visibility proof are required.")
+
+    lines.extend(["", "## Expansion Rules"])
+    for item in gate.get("expansion_rules", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("expansion_rules"):
+        lines.append("- No expansion without a clean first-client receipt and owner approval.")
+
+    lines.extend(["", "## Rollback / Park Command"])
+    for item in gate.get("rollback_or_park", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("rollback_or_park"):
+        lines.append("- Run `make inactive`.")
+
+    lines.extend(["", "## Still Blocks Broad Mode"])
+    for item in gate.get("still_blocks_broad_mode", []) or []:
+        lines.append(f"- {item}")
+    if not gate.get("still_blocks_broad_mode"):
+        lines.append("- Broad mode stays blocked until proof and explicit approval exist.")
+
+    lines.extend(
+        [
+            "",
+            "## Related Surfaces",
+            f"- Command Center: {relative_label(COMMAND_CENTER_MD)}",
+            f"- Send visibility: {relative_label(SEND_VISIBILITY_MD)}",
+            f"- Send kill switch: {relative_label(SEND_KILL_SWITCH_MD)}",
+            f"- App/portal proof: {relative_label(APP_PORTAL_EVENT_PROOF_JSONL)}",
+            f"- Reply receipts: {relative_label(HIGHLEVEL_REPLY_RECEIPTS_JSONL)}",
+        ]
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def write_preview_packet_decision(report: dict[str, Any], path: Path = PREVIEW_PACKET_DECISION_MD) -> None:
     decision = report.get("preview_packet_decision", {})
     is_capped_ready = decision.get("batch_preset") == "capped_ready_rollout"
@@ -4939,6 +5148,7 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
     write_billing_rollout_triage(report, BILLING_ROLLOUT_TRIAGE_MD, BILLING_ROLLOUT_TRIAGE_CSV)
     write_clean_backup_preview_pool(report, CLEAN_BACKUP_PREVIEW_MD, CLEAN_BACKUP_PREVIEW_CSV)
     write_business_review_controlled_rollout(report, BUSINESS_REVIEW_ROLLOUT_MD)
+    write_broad_autonomous_rollout_gate(report, BROAD_AUTONOMOUS_ROLLOUT_GATE_MD)
     write_preview_packet_decision(report, PREVIEW_PACKET_DECISION_MD)
     write_dict_csv(NO_APPROVAL_WORK_CSV, report.get("no_approval_work_queue", []), ["priority", "work_item", "input", "output"])
     state = build_operational_state()
@@ -4988,6 +5198,7 @@ def write_command_center(report: dict[str, Any]) -> dict[str, str]:
         "clean_backup_preview": relative_label(CLEAN_BACKUP_PREVIEW_MD),
         "clean_backup_preview_csv": relative_label(CLEAN_BACKUP_PREVIEW_CSV),
         "business_review_rollout": relative_label(BUSINESS_REVIEW_ROLLOUT_MD),
+        "broad_autonomous_rollout_gate": relative_label(BROAD_AUTONOMOUS_ROLLOUT_GATE_MD),
         "preview_packet_decision": relative_label(PREVIEW_PACKET_DECISION_MD),
         "no_approval_work": relative_label(NO_APPROVAL_WORK_CSV),
     }
@@ -5051,6 +5262,7 @@ def main() -> None:
     print(f"- Clean backup preview candidates: {paths['clean_backup_preview']}")
     print(f"- Clean backup preview candidates CSV: {paths['clean_backup_preview_csv']}")
     print(f"- Business review + controlled rollout: {paths['business_review_rollout']}")
+    print(f"- Broad autonomous rollout gate: {paths['broad_autonomous_rollout_gate']}")
     print(f"- Preview packet decision: {paths['preview_packet_decision']}")
     print(f"- No-approval work queue: {paths['no_approval_work']}")
     print(f"- Top actions: {len(report.get('top_actions', []))}")

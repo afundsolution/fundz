@@ -310,6 +310,40 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         self.assertEqual(proof["proof_status"], "captured_from_manual_import_no_send")
         send_reply.assert_not_called()
 
+    def test_manual_import_source_channel_can_prove_app_portal_without_app_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            import_dir = base / "imports"
+            import_dir.mkdir()
+            source = import_dir / "df-all-messages-export.csv"
+            source.write_text(
+                "contact,last message,date,direction,contact_id,conversation_id,lastMessageType,channel,source\n"
+                "Brandon Jordan,hey,2026-05-13T09:10:00Z,inbound,contact-app,conv-app,SMS,Mobile App SMS,disputefox-admin-all-messages\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(poller, "MANUAL_QUEUE_CSV", base / "manual.csv"),
+                mock.patch.object(poller, "MANUAL_QUEUE_MD", base / "manual.md"),
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_JSONL", base / "app-proof.jsonl"),
+                mock.patch.object(poller, "APP_PORTAL_PROOF_MD", base / "app-proof.md"),
+                mock.patch.object(poller, "load_env_file"),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "write_reply_queue"),
+                mock.patch.object(poller, "send_reply") as send_reply,
+            ):
+                summary = poller.poll_manual_imports(import_dir)
+
+            proof = __import__("json").loads((base / "app-proof.jsonl").read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertEqual(summary["sent"], 0)
+        self.assertEqual(proof["message_type"], "SMS")
+        self.assertEqual(proof["source"], "disputefox-admin-all-messages")
+        self.assertEqual(proof["proof_status"], "captured_from_manual_import_no_send")
+        self.assertIn("mobile app sms", proof["signals"])
+        self.assertIn("disputefox", proof["signals"])
+        send_reply.assert_not_called()
+
     def test_manual_import_plain_sms_does_not_write_app_portal_proof(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

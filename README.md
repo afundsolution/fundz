@@ -374,6 +374,19 @@ Before wiring the public webhook into Credit Tracker/AutoFox, run a signed test-
 make webhook-probe
 ```
 
+Before any approved live customer-service reply, generate the runtime wake proof checklist:
+
+```sh
+make runtime-wake-checklist
+```
+
+This is a no-wake command-center surface. It inspects local screens/processes, kill switch state, dry-run/approval flags, and proof receipt paths, then writes:
+
+- `data/local/command-center/fundz-runtime-wake-proof-checklist.md`
+- `data/local/command-center/fundz-runtime-wake-proof-checklist.json`
+
+The checklist does not start the bridge, tunnel, poller, webhook, or any send path. It must show a ready-for-approved-wake status before the operator wakes a named route, runs health checks, captures the test-only probe/preview proof, sends the single approved reply, and parks the runtime again.
+
 ### HighLevel Inbox Fallback
 
 If Cloudflare or the Credit Tracker webhook is not stable, FUNDz can poll HighLevel conversations directly. This lets inbound client texts reach FUNDz without a public tunnel.
@@ -431,6 +444,16 @@ Browser screenshots can prove a one-off app/portal event, but they graduate into
 - receipt: `app-portal-event-proof.jsonl` includes `proof_status` such as `captured_from_manual_import_no_send` or `captured_from_highlevel_poll_no_send`
 
 If those source fields are missing, keep the browser receipt as browser-only proof and do not treat the row as reusable API/manual/import evidence.
+
+One-client fresh app/portal proof process:
+
+1. Pick one named client and capture one fresh inbound app/portal message only. Do not reply from this proof step.
+2. Export or copy one business-only row into `data/local/highlevel-inbox-manual-imports/`.
+3. Include these fields whenever the source has them: `contact`, `last message`, `date`, `direction`, `contact_id`, `conversation_id`, `lastMessageType` or `messageType`, `channel`, and `source`.
+4. Run `make highlevel-inbox-workaround`.
+5. Pass means `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` gets a new row for that client with `proof_status=captured_from_manual_import_no_send`, an app/portal signal from message type or source/channel, and no send receipt.
+6. Fail means no app/portal proof row is written, the row is plain SMS/browser-only, contact or conversation identity is missing, or the classification is sensitive/proof-dependent.
+7. Graduation to controlled live-reply eligibility requires all of the pass conditions plus owner approval for that one client, contact resolution, non-sensitive classification, command-center kill switch off, live-reply approval flags for the action window, and writable reply receipts. It still does not approve broad autonomous replies.
 
 To diagnose a real webhook payload before enabling live sends:
 

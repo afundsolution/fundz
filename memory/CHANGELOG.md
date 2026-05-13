@@ -2,6 +2,55 @@
 
 ## 2026-05-13
 
+### Slackbot Team Sequence
+
+- Added the local Slackbot/Slack AI team-sequence generator at `scripts/fundz_slackbot_team_sequence.py`.
+- Added `make slackbot-team-sequence`.
+- Added focused tests in `tests/test_fundz_slackbot_team_sequence.py`.
+- Generated the internal rollout packet at `data/local/command-center/fundz-slackbot-team-sequence.md`, `data/local/command-center/fundz-slackbot-team-sequence.json`, `data/local/command-center/fundz-slackbot-team-channels.csv`, and `assistant/fundz-slackbot-team-sequence.md`.
+- The packet defines six internal channels, Slackbot context prompts, FUNDz decision prompts, daily recap cadence, Jay/Lucy workorder checks, and owner-review boundaries.
+- Safety boundary: Slackbot/Slack AI is internal-only for this rollout and cannot send client messages, approve dispute strategy, edit DF/AutoFox, change billing, wire webhooks, wake live pollers, or mark `Approved` rows as `Done`.
+- Verification passed: `make slackbot-team-sequence`; `python3 -m unittest tests.test_fundz_slackbot_team_sequence -q` ran 3 tests OK; `python3 -m py_compile scripts/fundz_slackbot_team_sequence.py` passed.
+- No Slack channels were created, no Slack messages were posted, no live FUNDz runtime was woken, and no client-facing action occurred.
+
+### Command Center Broad Autonomous Rollout Gate
+
+- Added a generated `Broad Autonomous Rollout Gate` to `scripts/fundz_command_center.py`.
+- New output: `data/local/command-center/fundz-broad-autonomous-rollout-gate.md`, linked from the main generated Command Center.
+- The gate keeps broad autonomous mode disabled and sets the current cap to 0 broad autonomous replies.
+- The next controlled cap is exactly 1 named client, 1 app/portal inbound, 1 exact approved reply, and 1 receipt.
+- Added first-client proof requirements, expansion rules, exclusions, runtime wake proof, rollback/park command (`make inactive`), kill-switch/env reset steps, and remaining blockers for broad mode.
+- Added command-center regression coverage so generated outputs keep the broad-mode blocker visible.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 59 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- Closeout verification also passed: focused runtime/team/inbox/command-center tests ran 97 tests OK; `make test` ran 255 tests OK; `sh scripts/check-memory.sh` passed.
+- No live reply, live poller, bridge, webhook/tunnel wake, DF/AutoFox edit, campaign assignment, billing edit, browser action, client contact, Supabase write, or broad-mode enablement was performed.
+
+### Runtime Wake Proof Checklist
+
+- Inspected Makefile, README runtime docs, bridge/tunnel/poller wake scripts, inactive script, webhook probe, and the Command Center live reply gate without waking live runtime or sending anything.
+- Added `scripts/fundz_runtime_wake_checklist.py` and `make runtime-wake-checklist`.
+- The checklist writes `data/local/command-center/fundz-runtime-wake-proof-checklist.md` and `.json` with local screen/process posture, kill-switch state, dry-run/live approval flags, proof receipt paths, approval packet requirements, pre-wake steps, post-approval health proof steps, receipt checks, and rollback/park steps.
+- Updated README and the Command Center live reply gate so operators run the no-wake checklist before any approved customer-service reply.
+- Latest generated status is `BLOCKED_REVIEW_RUNTIME`: no live bridge/tunnel/poller screen or process was detected, only allowed command-center reporting is awake, but `CREDIT_TRACKER_DRY_RUN=false` and the kill switch is off locally.
+- Verification passed: `python3 -m py_compile scripts/fundz_runtime_wake_checklist.py scripts/fundz_command_center.py`; `python3 -m unittest tests.test_fundz_runtime_wake_checklist tests.test_fundz_command_center -q` ran 63 tests OK; `make command-center` passed. `make runtime-wake-checklist` generated the proof surface and exited 2 by design because it found the dry-run blocker.
+- No bridge, tunnel, poller, webhook, webhook probe, network health check, client reply, client/lead send, DF/AutoFox edit, billing edit, campaign action, browser action, or Supabase write was performed.
+
+### One-Client App/Portal Source Proof Process
+
+- Inspected the HighLevel manual import guide, app/portal proof JSONL/Markdown outputs, manual inbox workaround outputs, current receipts, README, inbox poller code, and inbox tests.
+- Made the one-client fresh app/portal proof process concrete in README and the ignored manual-import guide: required export fields, receipt target, pass/fail states, and the exact controlled-live eligibility boundary.
+- Added a regression test proving a manual import can pass app/portal proof from `channel=Mobile App SMS` and `source=disputefox-admin-all-messages` even when `lastMessageType=SMS`, and still sends nothing.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 31 tests OK; `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py` passed.
+- No live API call, live poller, browser action, send, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, Supabase write, or runtime wake was performed.
+
+### Broad Autonomous Customer-Service Supervisor Packet
+
+- Prepared `data/local/command-center/fundz-broad-autonomous-customer-service-supervisor-packet-2026-05-13.md` without waking live runtime or sending anything.
+- The packet consolidates the rollout approval packet, controlled-live scope/cap, runtime wake checklist, first-client proof runbook, one-reply receipt gate, expansion rules, and proof artifacts to update.
+- Supervisor decision: controlled-live is ready only for one named owner-approved non-sensitive app/portal reply with exact copy and receipt capture; broad autonomous third-party customer service remains blocked.
+- Broad mode still requires a fresh third-party app/portal inbound, repeatable API/webhook/manual-import source evidence, one approved reply receipt, current health, kill-switch/send-gate verification, and a separate Brandon-approved expansion cap.
+- No live reply, live HighLevel poller, bridge, webhook, tunnel, DF/AutoFox edit, billing edit, campaign assignment, or client-send runtime was enabled.
+
 ### Runtime / Webhook Readiness
 
 - Inspected the Credit Tracker bridge, HighLevel inbox poller, autonomy daemon/operator, Makefile targets, send gate, and kill switch without waking live runtime or sending anything.
