@@ -50,6 +50,17 @@
 - Added proof attempt receipt `data/local/command-center/fundz-live-app-portal-proof-attempt-2026-05-13.md`.
 - No campaign assignment, client send, HighLevel live reply, DF edit, billing edit, webhook wiring, or Supabase write was performed.
 
+### App/Portal Client-Side Proof Update
+
+- Confirmed repo-side hardening closeout is green: PR #13 merged into `main` at `b0a9435141f846493c633c8778a00a9162c24a9b`, and required `memory-check` and `python-tests` checks passed.
+- Captured Brandon-provided Credit Tracker mobile-app proof showing `Your Rep: Dispute Team` and a fresh app-side `hey` under `Today` at `4:10am`.
+- Added local proof receipt `data/local/command-center/fundz-app-portal-client-side-proof-2026-05-13.md` and copied the screenshot to `data/local/command-center/fundz-app-portal-client-side-proof-2026-05-13.png` plus `data/local/semi-autonomous/receipts/brandon-jordan-credit-tracker-app-message-20260513-0410.png`.
+- Ran HighLevel preview after the screenshot with `CREDIT_TRACKER_DRY_RUN=true FUNDZ_HIGHLEVEL_POLLER_LIVE=false`; it fetched 100, handled 41, ignored 59, previewed 41, and sent 0.
+- The HighLevel artifacts still did not show the exact fresh app message, an `App_Message`, or a portal/App Message row for this event.
+- Read-only DF profile view showed the older 2025 Portal Message only before a login-conflict modal appeared; a second read-only admin attempt still showed the same login-conflict modal, so the admin-side message surface remains blocked until the session is cleared.
+- Current conclusion: client-side app proof exists, but system-side capture is still missing. Next proof surface is DF/Credit Tracker `Messages` / `Communications Center` / `All Messages` on `secure.disputeprocess.com`.
+- No live reply, send, campaign assignment, DF/AutoFox edit, billing edit, webhook wiring, or Supabase write was performed.
+
 ## 2026-05-12
 
 ### Anthony Williams DF App Proof Closeout
