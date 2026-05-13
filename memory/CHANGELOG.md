@@ -1,6 +1,255 @@
 # Changelog
 
+## 2026-05-13
+
+### Customer-Service Agent Readiness
+
+- Audited FUNDz with parallel workstream agents covering product/UX, memory, personality, implementation, CRM/data, safety, testing, QA conversation, production verification, closeout, and architecture.
+- Broadened FUNDz intake recognition so Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and App Message payloads count as customer-service intake.
+- Added local HighLevel customer-memory summaries at `data/local/highlevel-inbox-poller/customer-memory.jsonl` and `data/local/highlevel-inbox-poller/customer-summaries.json`.
+- Added proof-dependent live holds for billing, cancellation, complaint, document request, app access, score concern, and dispute update intents.
+- Added local HighLevel live-reply receipts at `data/local/highlevel-inbox-poller/reply-receipts.jsonl`.
+- Kept no-action manual HighLevel imports out of the classified reply queue to reduce fake-open work.
+- Expanded risky-language blocking for funding, loan approval, preapproval, and guaranteed outcome claims.
+- Updated `assistant/fundz-assistant.md` and `README.md` with the FUNDz voice standard and app/portal conversation requirement.
+- Created `data/local/command-center/fundz-customer-service-readiness-2026-05-13.md`; final recommendation is ready for safe local customer-service preparation, not ready for fully live autonomous customer service.
+
+### Tests
+
+- `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py scripts/fundz_credit_tracker_bridge.py scripts/fundz_credit_tracker_replies.py scripts/fundz_autonomy_daemon.py`: passed.
+- `python3 -m unittest tests.test_fundz_highlevel_inbox_poller tests.test_fundz_autonomy tests.test_fundz_ai_router tests.test_fundz_postgres_memory -q`: 44 tests passed.
+- `make test`: 227 tests passed.
+
+### Production Verification
+
+- Production verification was safe/read-only: no live browser, DF/AutoFox, HighLevel, client send, webhook wiring, or Supabase write was performed.
+- Runtime was parked: no active bridge/tunnel/poller/iMessage fallback processes; local health endpoints not running.
+- Public health returned Cloudflare 530/1033 for both `https://fundz.afundsolution.com/health` and `https://fundz-command.afundsolution.com/health` because no origin/tunnel is connected.
+
+## 2026-05-12
+
+### Anthony Williams DF App Proof Closeout
+
+- Captured read-only DF/Pulse proof that Anthony Williams shows `App Status: Installed 05/12/26` and `Logged In`.
+- Added proof note and screenshot: `data/local/semi-autonomous/receipts/anthony-williams-df-app-status-installed-logged-in-proof-20260512.md` / `.png`.
+- Updated `scripts/fundz_command_center.py` so DF Installed/Logged In proof closes the prior App SMS failure row and keeps Anthony from regenerating as Failed.
+- Regenerated `make command-center`; Anthony's Work Queue row is now `Done` with proof/evidence attached, and current counts are 141 Approved, 45 Done, and 1 Sent.
+- Updated the task-completion audit and app-main rollout plan so Anthony recovery is 100 by proof capture only.
+- Verified `python3 -m unittest tests.test_fundz_command_center -q` passed 56 tests, `make test` passed 217 tests, and `sh scripts/check-memory.sh` passed.
+- No Mobile App SMS retry, campaign assignment, client send, DF edit, billing edit, HighLevel reply, or broad rollout was performed.
+
+### Personal Phone / Intake Governor Hardening
+
+- Added `assistant/personal-phone-redirect-sop.md` with existing-member redirect copy that sends members to the Credit Tracker app through an approved company channel.
+- Updated `assistant/fundz-assistant.md` and `assistant/fundz-routine-messaging-plan.md` so personal-phone spillover does not become a personal-line reply workflow.
+- Updated Phone App Intake outputs so the generated JSON, Markdown, and dashboard show the Existing Member Redirect copy directly.
+- Closed Travis Vance as personal/no-company-action after Brandon clarified it was personal.
+- Added `data/local/command-center/fundz-personal-phone-no-company-action.csv` and updated the importer to honor that local decision file.
+- Regenerated personal-phone, Intake Governor, and Phone App Intake outputs; Intake Governor now has 0 candidates and 0 alerts.
+- Updated `scripts/fundz_personal_phone_message_queue.py` so `make personal-phone-queue` regenerates the business-filtered queue, sanitized triage Markdown/CSV, and sanitized candidate CSV together.
+- Routed Brandon owner-number Messages rows to owner-command/private intake instead of client `Needs Reply`.
+- Kept unknown keyword-only inbound rows as review/false-positive items instead of automatic client replies.
+- Updated Phone App Intake so owner-command/private rows withhold the message body and stay out of shared client work.
+- Regenerated the personal-phone queue, triage, Intake Governor dashboard, and Phone App Intake outputs.
+- Verified focused intake tests passed: `python3 -m unittest tests.test_fundz_personal_phone_message_queue tests.test_fundz_intake_governor tests.test_fundz_intake_governor_visual tests.test_fundz_phone_app_intake -q` ran 17 tests OK.
+- No client reply, live send, shared-sheet upload, DF/HighLevel lookup, or browser action was performed.
+
+### AutoFox Migration Truth-Surface Cleanup
+
+- Updated the command-center generator so the AutoFox member-experience and migration checklist no longer report all 20 credit tips as pending.
+- Regenerated `data/local/command-center/fundz-autofox-member-experience-system.md` and `data/local/command-center/fundz-autofox-mobile-app-migration-checklist.md`.
+- The generated files now mark Credit Tips 01, 02, and 03 as saved with Mobile App SMS actions and internal note markers, and identify Credit Tip 04 as the next controlled target.
+- Verified `make command-center` passed and `python3 -m unittest tests.test_fundz_command_center -q` passed 55 tests.
+- No DF/Pulse browser edit, campaign assignment, client send, HighLevel reply, or broad rollout was performed.
+
+### Supabase Memory Sync Refresh
+
+- Tried `make supabase-memory-sync`; it stopped safely because no real Postgres database URL is configured in `.env.local`.
+- Regenerated the Supabase dashboard SQL fallback with `make supabase-dashboard-sql`.
+- Wrote 33 SQL chunks under `data/local/supabase-dashboard-sync` for 357 client profiles / 180 active clients.
+- Confirmed the final verification query is `data/local/supabase-dashboard-sync/chunk-032-verify.sql`, checking total client rows, active client rows, active-client view rows, and the dashboard snapshot marker.
+- Verified `python3 -m unittest tests.test_fundz_postgres_memory -q` passed 7 tests.
+- No live Supabase/Postgres write was performed in this pass.
+
+### Anthony Williams App Access Update
+
+- Recorded Brandon's update that Anthony Williams got into the app.
+- Added `data/local/semi-autonomous/receipts/anthony-williams-owner-reported-app-access-20260512.md`.
+- Updated `data/local/command-center/fundz-work-queue.csv` so Anthony moved from `Failed` to `Proof Needed`.
+- Updated the rollout plan and completion audit to distinguish owner-reported app access from verified Mobile App SMS recovery.
+- No client send, campaign assignment, DF edit, billing edit, or HighLevel reply was performed.
+
+### AutoFox Credit Tip 03 Step 8 Action Save
+
+- Verified `Step 8 - Credit Tip 03 - Credit Utilization (17 Days)` is saved in DF/Pulse under `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Confirmed Step 8 is `(Delay)`, `In Progress / Active`, and shows both `Mobile App SMS` and `Note Created`.
+- Added proof note and screenshot: `data/local/semi-autonomous/receipts/autofox-credit-tip-03-step8-mobile-sms-note-proof-20260512.md` and `.png`.
+- Used an internal note marker instead of broad `Update Data Fields`; no campaign assignment, manual client send, or broad rollout expansion was performed.
+
+## 2026-05-12
+
+### AutoFox Credit Tip 02 Step 7 Action Save
+
+- Added `Step 7 - Credit Tip 02 - Payment History (10 Days)` to DF/Pulse AutoFox `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Saved the step with `Start = Delay`, `Interval Type = Days`, and `Interval Value = 10`.
+- Added `Credit Tip 02 - Payment History Mobile App SMS` with the approved Credit Tip 2 app message copy.
+- Added an internal DF note marker titled `FUNDz marker - Credit Tip 02 Step 7` so the step state is visible to the team without changing broad data fields.
+- Saved proof note `data/local/semi-autonomous/receipts/autofox-credit-tip-02-step7-mobile-sms-note-proof-20260512.md` and screenshot `data/local/semi-autonomous/receipts/autofox-credit-tip-02-step7-mobile-sms-note-proof-20260512.png`.
+- No campaign was assigned, no manual client send was performed, no broad rollout was expanded, and no broad `Update Data Fields` change was saved.
+
+### AutoFox Credit Tip 01 Step 6 Action Save
+
+- Added `Credit Tip 01 - App Habit Mobile App SMS` to `Step 6 - Credit Tip 01 - App Habit (3 Days)` in DF/Pulse AutoFox `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Saved the approved Credit Tip 1 app message copy under the new Mobile App SMS action.
+- Added an internal DF note marker titled `FUNDz marker - Credit Tip 01 Step 6` so the step state is visible to the team without changing broad data fields.
+- Inspected `Update Data Fields`; no data-field update was saved because only broad system fields were visible and DF warned those fields could trigger/suspend other AutoFox flows.
+- Saved proof note `data/local/semi-autonomous/receipts/autofox-credit-tip-01-step6-mobile-sms-note-proof-20260512.md` and screenshot `data/local/semi-autonomous/receipts/autofox-credit-tip-01-step6-mobile-sms-note-proof-20260512.png`.
+- No campaign was assigned, no manual client send was performed, and no broad rollout was expanded.
+
+### AutoFox Credit Tip Delay Save
+
+- Logged back into DF/Pulse and opened `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).
+- Saved one controlled delayed step: `Credit Tip 01 - App Habit (3 Days)` with `Start = Delay`, `Interval Type = Days`, and `Interval Value = 3`.
+- DF returned `Success! Step Added Successfully`; the workflow now shows `Step 6 - Credit Tip 01 - App Habit (3 Days)` as `In Progress / Active`.
+- Saved proof note `data/local/semi-autonomous/receipts/autofox-credit-tip-delay-save-success-20260512.md` and screenshot `data/local/semi-autonomous/receipts/autofox-credit-tip-delay-save-success-20260512.png`.
+- No Mobile App SMS content/action was added yet, no campaign was assigned, and no client send was performed.
+
+### Broad Outreach Closeout Marking
+
+- Marked broad outreach completed as a parked/gated closeout, not as a completed live send.
+- Updated `scripts/fundz_command_center.py` so the generated missing-steps recheck now shows `Broad outreach rollout closeout` as `pass`.
+- Regenerated `data/local/command-center/fundz-missing-steps-recheck.md`; current summary is 6 pass, 3 review, and 1 blocked.
+- Updated `data/local/command-center/task-completion-audit-2026-05-12.md` so the broad outreach closeout is scored 100 as a safety decision.
+- Live broad outreach remains off: 5 preview rows, 0 allowed now, no owner notice sent, no campaign assignment, and no new client send.
+- Verified `make command-center` passed and `python3 -m unittest tests.test_fundz_command_center -q` passed 55 tests.
+
+### Supabase Command-Line Sync Cleanup
+
+- Added `make supabase-memory-sync` for the real Postgres URL path and `make supabase-dashboard-sql` for the dashboard SQL editor fallback.
+- Updated `scripts/fundz_postgres_memory.py` so the command-line path reports which database URL env var is used, and clearly blocks when no real Postgres URL exists.
+- Updated README and database docs to distinguish Supabase/Postgres connection strings from Supabase API URLs or API keys.
+- Updated the Command Center missing-steps wording so Supabase command-line sync remains blocked until `.env.local` has `FUNDZ_MEMORY_DATABASE_URL` or `SUPABASE_DB_URL`.
+- Verified `python3 -m unittest tests.test_fundz_postgres_memory -q` passed 7 tests; `python3 -m unittest tests.test_fundz_command_center tests.test_fundz_postgres_memory -q` passed 62 tests; `make supabase-dashboard-sql` wrote 33 chunks for 357 client profiles / 180 active; `make command-center` regenerated the board; `sh scripts/check-memory.sh` passed.
+- No live Supabase/Postgres write was performed because no real local database URL is configured.
+
+### Supabase Credential Search
+
+- Searched GitHub repo secret names and local Mac Mini credential surfaces for the real Supabase/Postgres URL without printing secret values.
+- Confirmed `afundsolution/logic-slack-bot` has a GitHub `SUPABASE_DB_URL` secret, but GitHub secrets are write-only and cannot be read back locally.
+- Decrypted and inspected local n8n credential metadata for `FUNDz Postgres`; it lacks a host and is not enough for Supabase command-line sync.
+- Tested 17 Supabase-looking local URL candidates from old agent/session stores; none were usable due to stale authentication, placeholder hosts, missing tenant, invalid query options, or unreachable direct host.
+- Left `.env.local` unchanged and did not run `make supabase-memory-sync`; the remaining blocker is the current Supabase DB password/current connection string.
+
+### Task Completion Closeout Pass
+
+- Added/updated `data/local/command-center/task-completion-audit-2026-05-12.md` as the local scorecard for the recent completion ratings.
+- Completed the safe local Lucy billing decision pass in `data/local/maintenance-cleanup/fundz-lucy-billing-decision-batch-2026-05-09.csv`.
+- Filled all 16 `selected_status` fields and all 16 `proof_note` fields: 15 rows are `still_billing_issue`, and 1 row is `needs_brandon` because the archive path still needs live DF preflight and receipt.
+- Validation confirmed 16 rows, 0 blank statuses, and 0 blank proof notes.
+- No client reminder was sent, no DF archive/edit was performed, no billing record was edited, no campaign was assigned, no broad outreach was approved, and no live HighLevel reply was sent.
+
+## 2026-05-09
+
+### Company Help Today Packet
+
+- Added `data/local/command-center/afs-company-help-today-2026-05-09.md` as a one-page operating packet for Brandon's "do something that can help the company today" request.
+- The packet directs today's work toward the A FUND Solution billing-maintenance batch, with a 30-minute block, P1 rows, current counts, auth blockers, and no-live-action boundaries.
+- Added `data/local/maintenance-cleanup/fundz-lucy-billing-decision-batch-2026-05-09.csv` with all 16 Lucy-owned billing rows and blank `selected_status` / `proof_note` fields.
+- Validated the batch CSV parses with 16 rows from Niala Agudelo through LaKeitha Beall.
+- No safe-state recheck, `make autonomous`, client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
 ## 2026-05-08
+
+### Weekly Safety Audit Cadence
+
+- Updated Codex automation `fundz-maintenance-autopilot` from daily 06:00 to weekly Monday 06:00.
+- Updated Codex automation `fundz-safe-autonomous-operator` from daily 06:01 to weekly Monday 06:30.
+- Updated `~/Library/LaunchAgents/com.afundsolution.fundz-autonomous-operator.plist` from hourly `StartInterval=3600` and `RunAtLoad=true` to weekly `StartInterval=604800` and `RunAtLoad=false`.
+- Reloaded the autonomous LaunchAgent; `launchctl print` now shows it enabled, not running, run interval 604800 seconds, runs 0, and last exit code never exited since reload.
+- Audit finding: `com.afundsolution.fundz-imessage-fallback` is currently disabled/unloaded, despite older notes saying both LaunchAgents were enabled.
+- Updated the daily productivity focus brief and local Codex memory with Brandon's guardrails: warn on repeated safe-state checks, wrong-folder FUNDz commands, cross-surface context switching before closing rows, half-open approval/auth loops, and unbatched billing-owner updates.
+- No client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
+### Command Center Operating Map
+
+- Added an operating map to the protected A FUND Solution Command Center home page.
+- The home page now states that A FUND Solution has one Command Center and FUNDz is a source workflow feeding local evidence, billing, archive, and message-readiness outputs.
+- Added quick routing for Today Board first, Work Queue task rows, Billing Maintenance decisions, Send Visibility receipts/gates, and Next Send Queue previews.
+- Added a matching Operating Map section to the generated Markdown report so the raw file is easier to understand too.
+
+### A FUND Solution Command Center Naming
+
+- Corrected the operating vocabulary: A FUND Solution has the only Command Center; FUNDz is a source workspace/workflow feeding that Command Center.
+- Updated dashboard, Lucy billing queue, SOP, Governor, and test labels to use A FUND Solution Command Center and A FUND Solution billing maintenance in user-facing text.
+- Kept `fundz-` filenames where they identify local source artifacts.
+- No client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
+### Lucy Billing Maintenance Ownership
+
+- Added `assistant/lucy-billing-maintenance-sop.md` to define Lucy's billing maintenance decision options, proof requirements, and escalation conditions.
+- Added `scripts/fundz_lucy_billing_workqueue.py` and `tests/test_fundz_lucy_billing_workqueue.py`.
+- Maintenance autopilot now generates `data/local/maintenance-cleanup/fundz-lucy-billing-workqueue.md` and `.csv`.
+- Current Lucy queue has 16 active billing issue items: 7 duplicate-review clients and 9 standard card-failure reviews.
+- Updated Jay/Lucy daily workorder SOP and Governor instructions so Lucy owns this lane and Brandon only gets escalations requiring owner authority, live edits, client contact, money judgment, or conflicting proof.
+- Verified `TODAY=2026-05-08 make maintenance-autopilot` passed 9/9 with no safety findings, `make test` passed 209 tests, and `sh scripts/check-memory.sh` passed.
+- No client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
+### Owner Billing Status Updates
+
+- Added `data/local/maintenance-cleanup/fundz-owner-billing-status-updates.csv` as the local owner-proof file for billing status corrections.
+- Recorded Corrissa Weaver as paid, Arthur Pedraza as archived, Don Dupre as DF error pending fix, and Felicia Williams, Lue L. Paige, Sakia Riley, Brenda Taylor, Dana Young, Devante lee, Tiwalade Abdul, Mark Bueford, and Nathan Edwards as paid with active service.
+- Updated the maintenance cleanup board to remove owner-reported paid/active, paid, archived, and DF-error-pending-fix rows from the billing issue side pending the next system refresh or DF answer.
+- Current billing focus is 16 active billing issue clients: 0 urgent, 0 date-sensitive, 9 standard, 0 missing billing dates, and 7 duplicate-review clients.
+- Verified `TODAY=2026-05-08 make maintenance-autopilot` passed 8/8 with no safety findings and `make test` passed 207 tests.
+- No client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
+### Date-Sensitive Billing Review Clearance
+
+- Added `scripts/fundz_date_sensitive_billing_review.py` to generate a local review-clearance packet from the active billing issue CSV.
+- Added `data/local/maintenance-cleanup/fundz-date-sensitive-billing-review-clearance.md` and `.csv` to separate completed local review from actual live billing clearance.
+- Reviewed all 12 active date-sensitive billing rows locally: 3 card/payment-method holds need live payment proof, and 9 low-credit holds need live ScoreFusion credit/funding proof.
+- Marked client contact allowed now as 0 and live edits allowed now as 0 in the packet.
+- Wired the packet into the maintenance autopilot; latest `TODAY=2026-05-08 make maintenance-autopilot` passed 8/8 with no safety findings.
+- Verified `make test` passed 206 tests.
+- No client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
+### Command Center Friendly Click-Through Pages
+
+- Changed the protected Command Center navigation tiles to open friendly `/view/<slug>` pages instead of dumping raw Markdown/CSV/JSON directly.
+- Added shared dashboard styling, active page highlighting, compact mobile navigation, readable Markdown rendering, focused CSV tables with summary cards, and a wrapped JSON inspection page.
+- Kept the raw `/files/<slug>` endpoints available from each page through an `Open Raw File` link for audits and machine-readable use.
+- Verified `python3 -m unittest tests.test_fundz_command_center_server tests.test_fundz_command_center -q` passed 59 tests, every dashboard view URL returned 200 with dashboard/raw links, and Browser checks passed on desktop and mobile-sized Work Queue views with no console warnings.
+- No client send, HighLevel reply, DF/AutoFox edit, billing edit, campaign assignment, or webhook wiring was performed.
+
+### Billing Active-System Filter
+
+- Updated billing maintenance so the billing list is checked against the latest active DisputeFox export before a row enters the billing issue side.
+- Defined the active billing gate as found in the active export with next import greater than `-30 Days`; `-30 Days` or older, archived, missing from active export, and active-export rows missing next import are excluded from billing issue work.
+- Reduced the active billing issue side from 184 unique billing names to 28 active clients: 0 urgent, 12 date-sensitive, 9 standard, 0 missing billing dates, and 7 duplicate-review clients.
+- Added `data/local/maintenance-cleanup/fundz-active-billing-issues.csv` and `data/local/maintenance-cleanup/fundz-non-active-billing-review.csv`.
+- Updated the Command Center billing focus to use the active billing issue CSV and show the 156 excluded non-active/stale/not-found rows separately.
+- Verified focused maintenance/command-center tests passed 60 tests, `TODAY=2026-05-08 make maintenance-autopilot` passed 7/7 with no safety findings, and `make test` passed 202 tests.
+- No client send, billing edit, DF/AutoFox edit, campaign assignment, or live HighLevel reply was performed.
+
+### Command Center Gap Closure
+
+- Cleaned the safety tile so the allowed local Command Center dashboard server and protected reporting tunnel are classified as reporting runtime, not unsafe live-send runtime.
+- Added explicit `allowed_reporting_runtime`, `unexpected_runtime_processes`, and `unexpected_runtime_screens` fields to the safety gate.
+- Added billing maintenance focus outputs at `data/local/command-center/fundz-billing-maintenance-focus.md` and `.csv`.
+- Added archive receipt audit output at `data/local/command-center/fundz-archive-receipt-trail.md`, showing 29 live-confirmed stale-import archive candidates and 7 owner exceptions.
+- Added send gate lock output at `data/local/command-center/fundz-send-gate-lock.md`, showing 5 preview rows and 0 allowed now.
+- Added dashboard links/cards for Billing Maintenance, Archive Receipts, and Send Gate Lock.
+- Restarted only the protected Command Center server on `127.0.0.1:8797` so the new dashboard renderer loaded.
+- Verified focused command-center tests passed 57 tests, full `make test` passed 201 tests, maintenance autopilot passed 7/7 with no safety findings, the tokenized dashboard showed the new links, and all three new file endpoints returned the expected reports.
+- No client send, HighLevel reply, DF/AutoFox edit, billing edit, campaign assignment, or webhook wiring was performed.
+
+### Jay/Lucy Daily Workorder SOP
+
+- Added `assistant/jay-lucy-daily-workorder-sop.md` as the durable SOP/operator script for Jay and Lucy's daily `/workorder` closeout.
+- Covered operating surfaces, daily timeline, Jay Disputer requirements, Lucy Supervisor requirements, required tracker fields, status rules, privacy rules, Brandon escalation format, closeout scripts, and done standard.
+- Added a pointer from `assistant/governor.md` so Governor/operator context can find the SOP.
+- Verified `sh scripts/check-memory.sh` passed and `make test` passed 192 tests.
+- No live client send, HighLevel reply, DF/AutoFox edit, browser action, or webhook wiring was performed.
 
 ### Command Center Friendly Inactive UI
 
@@ -13,7 +262,7 @@
 
 ### Command Center Domain
 
-- Added `scripts/fundz_command_center_server.py`, a protected local web dashboard for the FUNDz Command Center.
+- Added `scripts/fundz_command_center_server.py`, a protected local web dashboard for the A FUND Solution Command Center.
 - Added `scripts/fundz_command_center_domain_setup.sh` and `make command-center-domain`.
 - Routed `fundz-command.afundsolution.com` through the existing `fundz-credit-tracker` Cloudflare tunnel while preserving `fundz.afundsolution.com` for the webhook ingress.
 - Stored the owner URL/token only in Git-ignored `data/local/command-center/fundz-command-center-domain.json`.
@@ -36,6 +285,10 @@
 - Result OK (7/7), no safety findings; rollout remains approval-gated (`approval_required=true`, `live_send_allowed=false`, `selected=0`).
 - Ran `python3 scripts/fundz_maintenance_autopilot.py --today 2026-05-08 --run-tests` (2026-05-08 06:10 CDT).
 - Result OK (7/7), no safety findings; rollout remains approval-gated (`approval_required=true`, `live_send_allowed=false`, `selected=0`).
+- Ran `python3 scripts/fundz_maintenance_autopilot.py --today 2026-05-08 --run-tests` (2026-05-08 12:18 CDT).
+- Result OK (7/7), no safety findings; rollout remains approval-gated (`approval_required=true`, `live_send_allowed=false`, `selected=0`).
+- Ran `python3 scripts/fundz_maintenance_autopilot.py --today 2026-05-08 --run-tests` (2026-05-08 15:24 CDT).
+- Result OK (7/7), no safety findings; rollout remains approval-gated (`approval_required=true`, `live_send_allowed=false`, `selected=0`, `held_before_packet=66`).
 
 ### Owner Pre-Send Text Notice
 
@@ -540,4 +793,4 @@
 ## 2026-05-08
 
 - Ran maintenance cleanup autopilot (ScoreFusion billing refresh + cleanup boards + command center regen + rollout approval-gate verification + tests).
-- Latest status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-08 09:14 CDT; OK; approval required; live sends disabled; selected=0).
+- Latest status: `data/local/maintenance-cleanup/fundz-maintenance-autopilot-status.md` (generated 2026-05-08 16:25 CDT; OK; approval required; live sends disabled; selected=0; held_before_packet=66).
