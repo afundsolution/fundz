@@ -39,6 +39,17 @@
 - Re-parked after proof capture with `make inactive` and killed the leftover local bridge process; the client-facing bridge is no longer listening locally.
 - Remaining blocker before calling FUNDz 100% fully live customer-service ready: capture one fresh real DisputeFox/Credit Tracker app or portal inbound from a client device, then capture an owner-approved safe app/portal reply receipt plus app visibility proof.
 
+### Live App/Portal Proof Follow-Up
+
+- Continued the remaining live-proof gate with subagents, a HighLevel dry-run inbox preview, and read-only DF checks.
+- HighLevel preview used `CREDIT_TRACKER_DRY_RUN=true FUNDZ_HIGHLEVEL_POLLER_LIVE=false`; it fetched 50, handled 22, ignored 28, previewed 22, and sent 0. The handled items still did not prove a fresh Credit Tracker/DisputeFox app or portal inbound.
+- Disqualified Henry Fisher Sr. for the next one-client proof because fresh DF preflight showed `Archived - Round 5 Ready`, a visible payment-failed warning, and repeated card-failure notifications.
+- Disqualified James Hawkins as a backup because fresh DF preflight showed `Archived - Round 5 Ready` and app status `Invitation Sent`.
+- Confirmed Anthony Williams is only a conditional backup: DF still shows `Installed 05/12/26` and `Logged In`, but no retry, campaign assignment, or rollout was approved.
+- Identified Brandon Jordan's own DF client profile as the safest owner-side route if Brandon sends a fresh app/portal message from the client side.
+- Added proof attempt receipt `data/local/command-center/fundz-live-app-portal-proof-attempt-2026-05-13.md`.
+- No campaign assignment, client send, HighLevel live reply, DF edit, billing edit, webhook wiring, or Supabase write was performed.
+
 ## 2026-05-12
 
 ### Anthony Williams DF App Proof Closeout
