@@ -2,6 +2,14 @@
 
 ## 2026-05-13
 
+### Supabase Command-Line Sync Unblocked
+
+- Saved the validated Supabase Postgres connection string to local `.env.local` as `FUNDZ_MEMORY_DATABASE_URL` without printing or committing the secret.
+- Preserved the previous `.env.local` in a timestamped `.env.local.bak-supabase-*` backup.
+- Ran `make supabase-memory-sync`; it applied `db/migrations/001_live_memory.sql` and synced 357 generated FUNDz client profiles / 180 active clients.
+- Verified live read-back counts separately: 360 total `fundz_client_memory` rows, 180 active client rows, 180 active-view rows, and 2 snapshots.
+- No client send, DF/AutoFox edit, HighLevel live action, campaign assignment, billing edit, or webhook wiring was performed.
+
 ### Customer-Service Agent Readiness
 
 - Audited FUNDz with parallel workstream agents covering product/UX, memory, personality, implementation, CRM/data, safety, testing, QA conversation, production verification, closeout, and architecture.
