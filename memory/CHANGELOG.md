@@ -26,6 +26,19 @@
 - Runtime was parked: no active bridge/tunnel/poller/iMessage fallback processes; local health endpoints not running.
 - Public health returned Cloudflare 530/1033 for both `https://fundz.afundsolution.com/health` and `https://fundz-command.afundsolution.com/health` because no origin/tunnel is connected.
 
+### Production Routing Follow-Up
+
+- Resolved PR #11 conflicts after PR #10 changed the Command Center hub, preserving the customer-service/app-portal hardening and the newer Command Center server surface.
+- PR #11 `Close out FUNDz scoped operational lanes` passed required `memory-check` and `python-tests` checks and merged into `main` at `e088e9c7ac0e5afe585497dcbd276fe7b2365eb8`.
+- Local `main` was fast-forwarded to the merge commit.
+- Verified local merged code: focused customer-service/server tests passed 50 tests, full `make test` passed 228 tests, and `sh scripts/check-memory.sh` passed.
+- Temporarily woke only the approved dry-run bridge and existing Cloudflare route. Local/public bridge health and local/public Command Center health all returned HTTP 200.
+- Ran `make webhook-probe`; the signed test-only public webhook returned HTTP 200 with `test_only=true` and `would_reply=true`, and no client send occurred.
+- Ran HighLevel inbox preview with `CREDIT_TRACKER_DRY_RUN=true`; it fetched 10, handled 4, ignored 6, previewed 4, and sent 0 while writing customer-memory, summary, and classified queue artifacts.
+- Added local proof receipt `data/local/command-center/fundz-production-verification-2026-05-13.md`.
+- Re-parked after proof capture with `make inactive` and killed the leftover local bridge process; the client-facing bridge is no longer listening locally.
+- Remaining blocker before calling FUNDz 100% fully live customer-service ready: capture one fresh real DisputeFox/Credit Tracker app or portal inbound from a client device, then capture an owner-approved safe app/portal reply receipt plus app visibility proof.
+
 ## 2026-05-12
 
 ### Anthony Williams DF App Proof Closeout
