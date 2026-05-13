@@ -55,6 +55,27 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         self.assertEqual(payload["first_name"], "Erika")
         self.assertEqual(payload["message"], "Any update on my file?")
 
+    def test_normalize_app_message_conversation(self):
+        payload = poller.normalize_conversation(
+            {
+                "id": "conv-app",
+                "contactId": "contact-app",
+                "lastMessageId": "msg-app",
+                "lastMessageType": "TYPE_APP_MESSAGE",
+                "lastMessageBody": "Can I talk with FUNDz in the Credit Tracker app?",
+                "lastMessageDate": "2026-05-03T20:00:00.000Z",
+                "contact": {"firstName": "Erika", "lastName": "Jordan"},
+            },
+            "loc-123",
+        )
+
+        self.assertEqual(payload["messageType"], "App_Message")
+        self.assertEqual(payload["channel"], "credit-tracker")
+
+    def test_normalize_whatsapp_is_not_app_message(self):
+        self.assertEqual(poller.normalize_message_type("TYPE_WHATSAPP"), "WhatsApp")
+        self.assertEqual(poller.normalize_message_type("WhatsApp"), "WhatsApp")
+
     def test_poll_once_previews_without_live_send(self):
         response = {
             "conversations": [
@@ -129,6 +150,8 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
             with (
                 mock.patch.object(poller, "STATE_DIR", base),
                 mock.patch.object(poller, "REPLY_QUEUE", base / "classified.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_MEMORY", base / "customer-memory.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_SUMMARIES", base / "customer-summaries.json"),
             ):
                 poller.write_reply_queue(payload, classification)
                 poller.write_reply_queue(payload, classification)
@@ -141,6 +164,8 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
 
         self.assertIn("billing", classification["labels"])
         self.assertTrue(classification["needs_brandon_reply"])
+        self.assertTrue(classification["needs_follow_up"])
+        self.assertEqual(classification["recommended_response_mode"], "owner_review_required")
         self.assertEqual(classification["safe_auto_reply_draft"], "")
 
     def test_classifies_simple_question_with_safe_draft(self):
@@ -148,7 +173,114 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
 
         self.assertIn("question", classification["labels"])
         self.assertFalse(classification["needs_brandon_reply"])
-        self.assertIn("reviewing", classification["safe_auto_reply_draft"])
+        self.assertIn("right answer", classification["safe_auto_reply_draft"])
+
+    def test_classifies_score_concern_as_verified_context_needed(self):
+        classification = poller.classify_inbound_reply("My credit score dropped. What happened?")
+
+        self.assertIn("score_concern", classification["labels"])
+        self.assertFalse(classification["needs_brandon_reply"])
+        self.assertTrue(classification["needs_follow_up"])
+        self.assertEqual(classification["recommended_response_mode"], "reassure_with_verified_facts")
+
+    def test_write_reply_queue_updates_customer_memory_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = {
+                "message_id": "msg-memory-1",
+                "contact_id": "contact-memory-1",
+                "conversation_id": "conv-memory-1",
+                "name": "Erika Jordan",
+                "message": "My credit score dropped. What happened?",
+            }
+            classification = poller.classify_inbound_reply(payload["message"])
+
+            with (
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "REPLY_QUEUE", base / "classified.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_MEMORY", base / "customer-memory.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_SUMMARIES", base / "customer-summaries.json"),
+            ):
+                poller.write_reply_queue(payload, classification)
+
+            memory_lines = (base / "customer-memory.jsonl").read_text(encoding="utf-8").splitlines()
+            summaries = __import__("json").loads((base / "customer-summaries.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(len(memory_lines), 1)
+        self.assertIn("contact:contact-memory-1", summaries)
+        self.assertIn("score_concern", summaries["contact:contact-memory-1"]["recent_topics"])
+        self.assertTrue(summaries["contact:contact-memory-1"]["open_follow_up"])
+
+    def test_live_holds_proof_dependent_replies(self):
+        billing = poller.classify_inbound_reply("Why was my card charged twice?")
+        score = poller.classify_inbound_reply("My credit score dropped. What happened?")
+        app_access = poller.classify_inbound_reply("I cannot log into the Credit Tracker app.")
+
+        self.assertIn("owner review required", poller.live_reply_hold_reason(billing))
+        self.assertIn("verified customer-service context", poller.live_reply_hold_reason(score))
+        self.assertIn("verified customer-service context", poller.live_reply_hold_reason(app_access))
+
+    def test_live_hold_does_not_send_sensitive_reply(self):
+        payload = {
+            "message_id": "msg-hold-1",
+            "contact_id": "contact-1",
+            "conversation_id": "conv-1",
+            "message": "My credit score dropped. What happened?",
+            "messageType": "SMS",
+            "phone": "+15555550123",
+        }
+
+        with (
+            mock.patch.object(poller, "has_seen", return_value=False),
+            mock.patch.object(poller, "write_reply_queue"),
+            mock.patch.object(poller, "write_poll_log") as write_poll_log,
+            mock.patch.object(poller, "draft_bridge_reply", return_value="Safe local reply."),
+            mock.patch.object(poller, "send_reply") as send_reply,
+            mock.patch.object(poller, "mark_seen") as mark_seen,
+        ):
+            result = poller.handle_payload(payload, live=True)
+
+        self.assertTrue(result["held"])
+        self.assertFalse(result["sent"])
+        send_reply.assert_not_called()
+        mark_seen.assert_called_once_with("msg-hold-1")
+        self.assertTrue(any(call.args[0] == "reply_hold" for call in write_poll_log.call_args_list))
+
+    def test_successful_live_reply_writes_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = {
+                "message_id": "msg-sent-1",
+                "contact_id": "contact-1",
+                "conversation_id": "conv-1",
+                "name": "Ada Lovelace",
+                "message": "Thanks!",
+                "messageType": "SMS",
+                "phone": "+15555550123",
+            }
+            send_result = {"sent": True, "status": 201}
+
+            with (
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "REPLY_QUEUE", base / "classified.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_MEMORY", base / "customer-memory.jsonl"),
+                mock.patch.object(poller, "CUSTOMER_SUMMARIES", base / "customer-summaries.json"),
+                mock.patch.object(poller, "REPLY_RECEIPTS", base / "reply-receipts.jsonl"),
+                mock.patch.object(poller, "has_seen", return_value=False),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "draft_bridge_reply", return_value="Received. Thank you."),
+                mock.patch.object(poller, "send_reply", return_value=send_result),
+                mock.patch.object(poller, "mark_seen"),
+                mock.patch.object(poller, "log_event"),
+            ):
+                result = poller.handle_payload(payload, live=True)
+
+            receipt = __import__("json").loads((base / "reply-receipts.jsonl").read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertTrue(result["sent"])
+        self.assertEqual(receipt["message_id"], "msg-sent-1")
+        self.assertTrue(receipt["sent"])
+        self.assertEqual(receipt["status"], 201)
 
     def test_live_refuses_when_dry_run_enabled(self):
         with mock.patch.object(poller, "load_env_file"):
@@ -184,6 +316,31 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
             self.assertEqual(summary["sent"], 0)
             self.assertIn("Ada Lovelace", (base / "manual.csv").read_text(encoding="utf-8"))
             send_reply.assert_not_called()
+
+    def test_manual_import_does_not_queue_no_action_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            import_dir = base / "imports"
+            import_dir.mkdir()
+            source = import_dir / "highlevel-export.csv"
+            source.write_text(
+                "contact,last message,date,direction,contact_id,conversation_id\n"
+                "Ada Lovelace,Thanks!,2026-05-06,inbound,contact-1,conv-1\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(poller, "MANUAL_QUEUE_CSV", base / "manual.csv"),
+                mock.patch.object(poller, "MANUAL_QUEUE_MD", base / "manual.md"),
+                mock.patch.object(poller, "STATE_DIR", base),
+                mock.patch.object(poller, "load_env_file"),
+                mock.patch.object(poller, "write_poll_log"),
+                mock.patch.object(poller, "write_reply_queue") as write_reply_queue,
+            ):
+                summary = poller.poll_manual_imports(import_dir)
+
+        self.assertEqual(summary["imported"], 1)
+        self.assertEqual(summary["review"], 1)
+        write_reply_queue.assert_not_called()
 
 
 if __name__ == "__main__":

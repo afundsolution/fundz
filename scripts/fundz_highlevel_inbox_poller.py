@@ -33,6 +33,9 @@ STATE_DIR = ROOT / "data" / "local" / "highlevel-inbox-poller"
 SEEN_MESSAGES = STATE_DIR / "seen-messages.txt"
 POLL_LOG = ROOT / "logs" / "highlevel-inbox-poller.jsonl"
 REPLY_QUEUE = STATE_DIR / "classified-replies.jsonl"
+CUSTOMER_MEMORY = STATE_DIR / "customer-memory.jsonl"
+CUSTOMER_SUMMARIES = STATE_DIR / "customer-summaries.json"
+REPLY_RECEIPTS = STATE_DIR / "reply-receipts.jsonl"
 MANUAL_IMPORT_DIR = ROOT / "data" / "local" / "highlevel-inbox-manual-imports"
 MANUAL_QUEUE_CSV = STATE_DIR / "manual-inbox-workaround.csv"
 MANUAL_QUEUE_MD = STATE_DIR / "manual-inbox-workaround.md"
@@ -61,9 +64,16 @@ REPLY_CLASS_PATTERNS = {
     "cancel": ("cancel", "cancellation", "stop service", "close my account"),
     "complaint": ("upset", "angry", "mad", "complaint", "not happy", "frustrated"),
     "billing": ("billing", "payment", "charged", "invoice", "refund", "card", "subscription"),
-    "document_request": ("document", "upload", "portal", "login", "password", "agreement", "id"),
+    "document_request": ("document", "upload", "agreement", "identification"),
+    "app_access": ("app", "credit tracker", "portal", "login", "password"),
+    "score_concern": ("score", "dropped", "went down", "decrease", "changed"),
+    "dispute_update": ("dispute", "round", "bureau", "deleted", "removed", "next import", "import"),
     "question": ("?", "what", "when", "where", "why", "how", "update", "status"),
 }
+
+FOLLOW_UP_LABELS = {"billing", "cancel", "complaint", "document_request", "app_access", "score_concern", "dispute_update"}
+SENSITIVE_OWNER_LABELS = {"billing", "cancel", "complaint", "document_request"}
+LIVE_HOLD_LABELS = {"billing", "cancel", "complaint", "document_request", "app_access", "score_concern", "dispute_update"}
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -121,17 +131,132 @@ def classify_inbound_reply(text: str) -> dict[str, Any]:
     ]
     if not labels:
         labels = ["no_action"]
-    needs_owner = any(label in labels for label in {"cancel", "complaint", "billing", "document_request"})
+    needs_owner = any(label in labels for label in SENSITIVE_OWNER_LABELS)
+    needs_follow_up = any(label in labels for label in FOLLOW_UP_LABELS) or "question" in labels
+    tone = customer_tone(text)
     safe_draft = ""
     if not needs_owner and (labels == ["question"] or "question" in labels):
-        safe_draft = "Thanks for checking in. I am reviewing the latest tracker details and will follow up with the next clear update."
+        safe_draft = (
+            "Thanks for checking in. I am reviewing the latest tracker details so we give you the right answer, "
+            "not a guess. I will follow up with the next clear update."
+        )
     elif not needs_owner and labels == ["no_action"]:
         safe_draft = "Received. Thank you."
     return {
         "labels": labels,
         "needs_brandon_reply": needs_owner,
+        "needs_follow_up": needs_follow_up,
+        "customer_tone": tone,
+        "recommended_response_mode": recommended_response_mode(labels, needs_owner, tone),
         "safe_auto_reply_draft": safe_draft,
     }
+
+
+def customer_tone(text: str) -> str:
+    lower = (text or "").lower()
+    if any(word in lower for word in ("angry", "mad", "upset", "frustrated", "cancel", "refund")):
+        return "frustrated"
+    if any(word in lower for word in ("worried", "nervous", "scared", "panic", "dropped", "went down")):
+        return "anxious"
+    if any(word in lower for word in ("thanks", "thank you", "appreciate")):
+        return "positive"
+    return "neutral"
+
+
+def recommended_response_mode(labels: list[str], needs_owner: bool, tone: str) -> str:
+    if needs_owner:
+        return "owner_review_required"
+    if tone in {"frustrated", "anxious"}:
+        return "reassure_with_verified_facts"
+    if "app_access" in labels:
+        return "help_with_app_access"
+    if "dispute_update" in labels or "score_concern" in labels:
+        return "answer_from_tracker_context"
+    if "question" in labels:
+        return "answer_or_queue_verified_update"
+    return "acknowledge"
+
+
+def contact_memory_key(payload: dict[str, Any]) -> str:
+    contact_id = contact_value(payload, "contact_id")
+    if contact_id:
+        return f"contact:{contact_id}"
+    fallback = "|".join(
+        str(contact_value(payload, key) or payload.get(key) or "")
+        for key in ("phone", "email", "name")
+    )
+    digest = hashlib.sha256(fallback.encode("utf-8")).hexdigest()[:16]
+    return f"hashed-contact:{digest}"
+
+
+def first_name_from_payload(payload: dict[str, Any]) -> str:
+    raw = str(payload.get("first_name") or payload.get("name") or "").strip()
+    return raw.split()[0] if raw else ""
+
+
+def load_customer_summaries() -> dict[str, Any]:
+    if not CUSTOMER_SUMMARIES.exists():
+        return {}
+    try:
+        payload = json.loads(CUSTOMER_SUMMARIES.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def write_customer_memory(payload: dict[str, Any], classification: dict[str, Any]) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    key = contact_memory_key(payload)
+    labels = classification.get("labels", [])
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    event = {
+        "time": now,
+        "contact_key": key,
+        "contact_id": contact_value(payload, "contact_id"),
+        "conversation_id": contact_value(payload, "conversation_id"),
+        "first_name": first_name_from_payload(payload),
+        "labels": labels,
+        "customer_tone": classification.get("customer_tone", "neutral"),
+        "needs_follow_up": bool(classification.get("needs_follow_up")),
+        "needs_brandon_reply": bool(classification.get("needs_brandon_reply")),
+        "recommended_response_mode": classification.get("recommended_response_mode", ""),
+        "message_preview": message_text(payload)[:240],
+    }
+    with CUSTOMER_MEMORY.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(redact_sensitive(event), ensure_ascii=True, sort_keys=True) + "\n")
+
+    summaries = load_customer_summaries()
+    previous = summaries.get(key, {}) if isinstance(summaries.get(key), dict) else {}
+    prior_topics = previous.get("recent_topics", []) if isinstance(previous.get("recent_topics"), list) else []
+    recent_topics = list(dict.fromkeys([*prior_topics, *labels]))[-8:]
+    count = int(previous.get("message_count", 0) or 0) + 1
+    summaries[key] = {
+        "contact_key": key,
+        "contact_id": contact_value(payload, "contact_id"),
+        "first_name": first_name_from_payload(payload),
+        "last_seen": now,
+        "message_count": count,
+        "recent_topics": recent_topics,
+        "last_tone": classification.get("customer_tone", "neutral"),
+        "last_response_mode": classification.get("recommended_response_mode", ""),
+        "open_follow_up": bool(classification.get("needs_follow_up") or previous.get("open_follow_up")),
+        "last_summary": build_memory_summary(labels, classification),
+    }
+    CUSTOMER_SUMMARIES.write_text(json.dumps(summaries, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def build_memory_summary(labels: list[str], classification: dict[str, Any]) -> str:
+    if "billing" in labels:
+        return "Customer asked about billing or payment; owner-safe billing review is required before a stronger reply."
+    if "score_concern" in labels:
+        return "Customer is worried about score movement; answer only from verified tracker/report context."
+    if "app_access" in labels:
+        return "Customer may need Credit Tracker app or portal help."
+    if "dispute_update" in labels:
+        return "Customer wants a dispute or round-status update from verified local records."
+    if classification.get("customer_tone") == "frustrated":
+        return "Customer tone is frustrated; respond calmly with facts, ownership, and a clear next step."
+    return "Customer contacted FUNDz; keep context available for the next reply."
 
 
 def reply_queue_has_message(message_id: str) -> bool:
@@ -158,6 +283,7 @@ def write_reply_queue(payload: dict[str, Any], classification: dict[str, Any]) -
     message_id = value_for(payload, ("message_id", "messageId", "event_id", "eventId"))
     if reply_queue_has_message(message_id):
         return
+    write_customer_memory(payload, classification)
     entry = {
         "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "message_id": message_id,
@@ -165,10 +291,40 @@ def write_reply_queue(payload: dict[str, Any], classification: dict[str, Any]) -
         "conversation_id": contact_value(payload, "conversation_id"),
         "name": payload.get("name") or payload.get("first_name") or "",
         "classification": classification,
+        "customer_memory_key": contact_memory_key(payload),
         "message_preview": message_text(payload)[:500],
     }
     with REPLY_QUEUE.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(redact_sensitive(entry), ensure_ascii=True, sort_keys=True) + "\n")
+
+
+def live_reply_hold_reason(classification: dict[str, Any]) -> str:
+    labels = set(classification.get("labels", []))
+    held = sorted(labels & LIVE_HOLD_LABELS)
+    if classification.get("needs_brandon_reply"):
+        return "owner review required for " + ", ".join(held or ["sensitive reply"])
+    if held:
+        return "verified customer-service context required for " + ", ".join(held)
+    return ""
+
+
+def write_reply_receipt(payload: dict[str, Any], reply: str, send_result: dict[str, Any], classification: dict[str, Any]) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    row = {
+        "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "message_id": value_for(payload, ("message_id", "messageId", "event_id", "eventId")),
+        "contact_id": contact_value(payload, "contact_id"),
+        "conversation_id": contact_value(payload, "conversation_id"),
+        "client": payload.get("name") or payload.get("first_name") or "",
+        "channel": payload.get("messageType") or payload.get("channel") or "",
+        "sent": bool(send_result.get("sent")),
+        "status": send_result.get("status") or send_result.get("status_code") or "",
+        "classification": classification.get("labels", []),
+        "reply_preview": reply[:240],
+        "send_result": send_result,
+    }
+    with REPLY_RECEIPTS.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(redact_sensitive(row), ensure_ascii=True, sort_keys=True) + "\n")
 
 
 def seen_key(message_id: str) -> str:
@@ -241,6 +397,8 @@ def normalize_message_type(raw: str) -> str:
         return "Email"
     if "WHATSAPP" in value:
         return "WhatsApp"
+    if "APP" in value or "PORTAL" in value:
+        return "App_Message"
     return "SMS"
 
 
@@ -451,8 +609,10 @@ def poll_manual_imports(path: Path = MANUAL_IMPORT_DIR) -> dict[str, Any]:
                 continue
             seen.add(message_id)
             classification = classify_inbound_reply(message_text(payload))
-            write_reply_queue(payload, classification)
-            queue_rows.append(manual_queue_row(payload, classification))
+            row = manual_queue_row(payload, classification)
+            if row["status"] != "Review" and message_text(payload):
+                write_reply_queue(payload, classification)
+            queue_rows.append(row)
 
     summary = {
         "ok": True,
@@ -523,6 +683,12 @@ def handle_payload(payload: dict[str, Any], live: bool) -> dict[str, Any]:
         write_poll_log("reply_preview", {"message_id": message_id, "reply": reply, "classification": classification, "payload": payload})
         return {"handled": True, "sent": False, "preview": True, "reply": reply, "classification": classification}
 
+    hold_reason = live_reply_hold_reason(classification)
+    if hold_reason:
+        write_poll_log("reply_hold", {"message_id": message_id, "reason": hold_reason, "classification": classification, "payload": payload})
+        mark_seen(message_id)
+        return {"handled": True, "sent": False, "held": True, "reason": hold_reason, "classification": classification}
+
     try:
         send_result = send_reply(payload, reply)
     except Exception as error:  # noqa: BLE001 - poller must preserve failures for owner review.
@@ -532,6 +698,7 @@ def handle_payload(payload: dict[str, Any], live: bool) -> dict[str, Any]:
 
     mark_seen(message_id)
     write_poll_log("reply_sent", {"message_id": message_id, "send_result": send_result, "classification": classification})
+    write_reply_receipt(payload, reply, send_result, classification)
     log_event("highlevel_poller_replied", {"event_id": message_id, "send_result": send_result})
     return {"handled": True, "sent": bool(send_result.get("sent")), "send_result": send_result, "reply": reply, "classification": classification}
 

@@ -15,7 +15,20 @@ SOURCE_DIRS = (ROOT / "data" / "dispute-fox", ROOT / "data" / "exports")
 OUTPUT_DIR = ROOT / "data" / "local" / "credit-tracker-replies"
 
 PENDING_WORDS = ("pending", "queued", "scheduled", "dead", "error", "failed")
-TRACKER_WORDS = ("credit tracker", "credit-tracker", "credit_tracker")
+TRACKER_WORDS = (
+    "credit tracker",
+    "credit-tracker",
+    "credit_tracker",
+    "app message",
+    "app_message",
+    "mobile app sms",
+    "mobile_app_sms",
+    "portal",
+    "client portal",
+    "disputefox",
+    "dispute fox",
+    "autofox",
+)
 BILLING_WORDS = ("billing", "payment", "paid", "invoice", "card", "scorefusion", "score fusion", "failed payment")
 CREDIT_MONITORING_NOTE = (
     "In the meantime, you can also check Credit Karma or another credit monitoring service "

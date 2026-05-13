@@ -376,6 +376,8 @@ make webhook-probe
 
 If Cloudflare or the Credit Tracker webhook is not stable, FUNDz can poll HighLevel conversations directly. This lets inbound client texts reach FUNDz without a public tunnel.
 
+FUNDz treats Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and HighLevel app/portal conversation rows as customer-service intake. Local intake can classify and remember those messages without sending a live reply. Live replies remain approval-gated and should not be enabled until the current app/portal route is reverified with a test-only webhook or a fresh HighLevel conversation snapshot.
+
 Preview mode, no sends:
 
 ```sh
