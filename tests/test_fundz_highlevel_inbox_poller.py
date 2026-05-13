@@ -360,11 +360,21 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
             "contact_id": "contact-1",
             "conversation_id": "conv-1",
             "message": "My credit score dropped. What happened?",
-            "messageType": "SMS",
+            "messageType": "App_Message",
             "phone": "+15555550123",
         }
 
         with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CREDIT_TRACKER_DRY_RUN": "false",
+                    "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                    "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                },
+                clear=False,
+            ),
+            mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
             mock.patch.object(poller, "has_seen", return_value=False),
             mock.patch.object(poller, "write_reply_queue"),
             mock.patch.object(poller, "write_poll_log") as write_poll_log,
@@ -393,12 +403,22 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
             }
 
             with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "CREDIT_TRACKER_DRY_RUN": "false",
+                        "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                        "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                    },
+                    clear=False,
+                ),
                 mock.patch.object(poller, "STATE_DIR", base),
                 mock.patch.object(poller, "APP_PORTAL_PROOF_JSONL", base / "app-proof.jsonl"),
                 mock.patch.object(poller, "APP_PORTAL_PROOF_MD", base / "app-proof.md"),
                 mock.patch.object(poller, "REPLY_QUEUE", base / "classified.jsonl"),
                 mock.patch.object(poller, "CUSTOMER_MEMORY", base / "customer-memory.jsonl"),
                 mock.patch.object(poller, "CUSTOMER_SUMMARIES", base / "customer-summaries.json"),
+                mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
                 mock.patch.object(poller, "has_seen", return_value=False),
                 mock.patch.object(poller, "write_poll_log"),
                 mock.patch.object(poller, "draft_bridge_reply", return_value="Safe local reply."),
@@ -419,17 +439,27 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
                 "conversation_id": "conv-1",
                 "name": "Ada Lovelace",
                 "message": "Thanks!",
-                "messageType": "SMS",
+                "messageType": "App_Message",
                 "phone": "+15555550123",
             }
             send_result = {"sent": True, "status": 201}
 
             with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "CREDIT_TRACKER_DRY_RUN": "false",
+                        "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                        "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                    },
+                    clear=False,
+                ),
                 mock.patch.object(poller, "STATE_DIR", base),
                 mock.patch.object(poller, "REPLY_QUEUE", base / "classified.jsonl"),
                 mock.patch.object(poller, "CUSTOMER_MEMORY", base / "customer-memory.jsonl"),
                 mock.patch.object(poller, "CUSTOMER_SUMMARIES", base / "customer-summaries.json"),
                 mock.patch.object(poller, "REPLY_RECEIPTS", base / "reply-receipts.jsonl"),
+                mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
                 mock.patch.object(poller, "has_seen", return_value=False),
                 mock.patch.object(poller, "write_poll_log"),
                 mock.patch.object(poller, "draft_bridge_reply", return_value="Received. Thank you."),
@@ -445,6 +475,191 @@ class FundzHighLevelInboxPollerTests(unittest.TestCase):
         self.assertEqual(receipt["message_id"], "msg-sent-1")
         self.assertTrue(receipt["sent"])
         self.assertEqual(receipt["status"], 201)
+
+    def test_live_reply_gate_blocks_plain_sms_even_when_live_flags_are_on(self):
+        payload = {
+            "message_id": "msg-broad-plain-sms",
+            "contact_id": "contact-1",
+            "conversation_id": "conv-1",
+            "message": "Thanks!",
+            "messageType": "SMS",
+            "phone": "+15555550123",
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CREDIT_TRACKER_DRY_RUN": "false",
+                    "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                    "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                },
+                clear=False,
+            ),
+            mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
+            mock.patch.object(poller, "has_seen", return_value=False),
+            mock.patch.object(poller, "write_reply_queue"),
+            mock.patch.object(poller, "write_poll_log"),
+            mock.patch.object(poller, "draft_bridge_reply", return_value="Received. Thank you."),
+            mock.patch.object(poller, "send_reply") as send_reply,
+            mock.patch.object(poller, "mark_seen") as mark_seen,
+        ):
+            result = poller.handle_payload(payload, live=True)
+
+        self.assertTrue(result["held"])
+        self.assertIn("app/portal proof signal required", result["reason"])
+        send_reply.assert_not_called()
+        mark_seen.assert_called_once_with("msg-broad-plain-sms")
+
+    def test_live_reply_gate_requires_real_app_portal_source_not_app_word_only(self):
+        payload = {
+            "message_id": "msg-app-word-only",
+            "contact_id": "contact-1",
+            "conversation_id": "conv-1",
+            "message": "I cannot log into the app.",
+            "messageType": "SMS",
+            "phone": "+15555550123",
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CREDIT_TRACKER_DRY_RUN": "false",
+                    "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                    "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                },
+                clear=False,
+            ),
+            mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
+        ):
+            reason = poller.controlled_live_reply_gate_reason(
+                payload,
+                poller.classify_inbound_reply(poller.message_text(payload)),
+            )
+
+        self.assertIn("app/portal proof signal required", reason)
+
+    def test_live_reply_gate_requires_action_time_controlled_approval(self):
+        payload = {
+            "message_id": "msg-no-approval",
+            "contact_id": "contact-1",
+            "conversation_id": "conv-1",
+            "message": "Thanks!",
+            "messageType": "App_Message",
+            "phone": "+15555550123",
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CREDIT_TRACKER_DRY_RUN": "false",
+                    "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "false",
+                    "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                },
+                clear=False,
+            ),
+            mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
+        ):
+            reason = poller.controlled_live_reply_gate_reason(
+                payload,
+                poller.classify_inbound_reply(poller.message_text(payload)),
+            )
+
+        self.assertIn("approval flag is off", reason)
+
+    def test_live_reply_gate_respects_command_center_kill_switch(self):
+        payload = {
+            "message_id": "msg-kill-switch",
+            "contact_id": "contact-1",
+            "conversation_id": "conv-1",
+            "message": "Thanks!",
+            "messageType": "App_Message",
+            "phone": "+15555550123",
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CREDIT_TRACKER_DRY_RUN": "false",
+                    "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                    "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                },
+                clear=False,
+            ),
+            mock.patch.object(poller, "send_kill_switch_enabled", return_value=(True, "paused by owner")),
+        ):
+            reason = poller.controlled_live_reply_gate_reason(
+                payload,
+                poller.classify_inbound_reply(poller.message_text(payload)),
+            )
+
+        self.assertIn("send kill switch is ON", reason)
+
+    def test_live_reply_gate_blocks_outside_business_hours_without_override(self):
+        payload = {
+            "message_id": "msg-after-hours",
+            "contact_id": "contact-1",
+            "conversation_id": "conv-1",
+            "message": "Thanks!",
+            "messageType": "App_Message",
+            "phone": "+15555550123",
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CREDIT_TRACKER_DRY_RUN": "false",
+                    "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                    "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "false",
+                },
+                clear=False,
+            ),
+            mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
+            mock.patch.object(poller, "datetime") as datetime_mock,
+        ):
+            datetime_mock.now.return_value = __import__("datetime").datetime(2026, 5, 13, 22, 0)
+            reason = poller.controlled_live_reply_gate_reason(
+                payload,
+                poller.classify_inbound_reply(poller.message_text(payload)),
+            )
+
+        self.assertIn("9 AM to 9 PM", reason)
+
+    def test_live_reply_gate_requires_receipt_logging_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_dir = Path(tmp) / "missing"
+            payload = {
+                "message_id": "msg-missing-receipt-path",
+                "contact_id": "contact-1",
+                "conversation_id": "conv-1",
+                "message": "Thanks!",
+                "messageType": "App_Message",
+                "phone": "+15555550123",
+            }
+
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "CREDIT_TRACKER_DRY_RUN": "false",
+                        "FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED": "true",
+                        "FUNDZ_ALLOW_AFTER_HOURS_SENDS": "true",
+                    },
+                    clear=False,
+                ),
+                mock.patch.object(poller, "REPLY_RECEIPTS", missing_dir / "reply-receipts.jsonl"),
+                mock.patch.object(poller, "send_kill_switch_enabled", return_value=(False, "off")),
+            ):
+                reason = poller.controlled_live_reply_gate_reason(
+                    payload,
+                    poller.classify_inbound_reply(poller.message_text(payload)),
+                )
+
+        self.assertIn("reply receipt directory is missing", reason)
 
     def test_live_refuses_when_dry_run_enabled(self):
         with mock.patch.object(poller, "load_env_file"):

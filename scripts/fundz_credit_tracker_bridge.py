@@ -39,6 +39,7 @@ LOG_DIR = ROOT / "logs"
 STATE_DIR = ROOT / "data" / "local" / "credit-tracker-bridge"
 EVENT_LOG = LOG_DIR / "credit-tracker-bridge.jsonl"
 SEEN_EVENTS = STATE_DIR / "seen-events.txt"
+SEND_KILL_SWITCH_JSON = ROOT / "data" / "local" / "command-center" / "fundz-send-kill-switch.json"
 
 DEFAULT_REPLY_TEMPLATE = json.dumps(
     {
@@ -61,6 +62,10 @@ class OutboundHTTPError(RuntimeError):
         self.status = status
         self.body = body
         self.transport = transport
+
+
+class SendKillSwitchEnabled(RuntimeError):
+    """Raised when a live outbound reply is blocked by the local kill switch."""
 
 
 def load_env_file(path: Path = ENV_PATH) -> None:
@@ -93,6 +98,39 @@ def env_int(name: str, default: int) -> int:
         return int(os.getenv(name, str(default)))
     except ValueError:
         return default
+
+
+def read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def send_kill_switch_enabled(path: Path | None = None) -> tuple[bool, str]:
+    if env_bool("FUNDZ_SEND_KILL_SWITCH") or env_bool("FUNDZ_COMMAND_CENTER_KILL_SWITCH"):
+        return True, "environment kill switch is enabled"
+    state = read_json(path or SEND_KILL_SWITCH_JSON)
+    if not isinstance(state, dict):
+        return False, "kill switch file missing or unreadable; defaulting to approval gates"
+    enabled = truthy_value(state.get("enabled"))
+    return enabled, str(state.get("reason") or "command-center kill switch is on").strip()
+
+
+def assert_live_sends_allowed() -> None:
+    enabled, reason = send_kill_switch_enabled()
+    if enabled:
+        log_event("send_blocked_kill_switch", {"reason": reason})
+        raise SendKillSwitchEnabled(f"FUNDz send kill switch is enabled: {reason}")
+
+
+def webhook_live_reply_gate_reason() -> str:
+    if not env_bool("FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED", False):
+        return "controlled webhook reply approval flag is off"
+    enabled, reason = send_kill_switch_enabled()
+    if enabled:
+        return "send kill switch is ON: " + reason
+    return ""
 
 
 def log_event(kind: str, payload: dict[str, Any]) -> None:
@@ -579,6 +617,9 @@ def send_reply(inbound: dict[str, Any], reply: str) -> dict[str, Any]:
     url = os.getenv("CREDIT_TRACKER_REPLY_URL", "")
     payload = build_outbound_payload(inbound, reply)
 
+    if url and not env_bool("CREDIT_TRACKER_DRY_RUN", False):
+        assert_live_sends_allowed()
+
     if not env_bool("CREDIT_TRACKER_DRY_RUN", False) and not get_live_access_token():
         raise RuntimeError("CREDIT_TRACKER_API_TOKEN is missing")
 
@@ -744,6 +785,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if test_only:
             log_event("webhook_test_only", {"event_id": key, "would_reply": True, "payload": redact_for_response(payload)})
             self.send_json(200, {"ok": True, "test_only": True, "would_reply": True, "reply_preview": reply})
+            return
+
+        gate_reason = webhook_live_reply_gate_reason()
+        if gate_reason:
+            log_event("reply_hold", {"event_id": key, "reason": gate_reason, "payload": redact_for_response(payload)})
+            mark_seen(f"event:{key}")
+            self.send_json(200, {"ok": True, "held": True, "reason": gate_reason})
             return
 
         try:

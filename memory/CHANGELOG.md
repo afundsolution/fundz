@@ -2,6 +2,47 @@
 
 ## 2026-05-13
 
+### Runtime / Webhook Readiness
+
+- Inspected the Credit Tracker bridge, HighLevel inbox poller, autonomy daemon/operator, Makefile targets, send gate, and kill switch without waking live runtime or sending anything.
+- Found and fixed a code-level gate gap: the command-center kill switch was not enforced in the bridge `send_reply()` path, and non-test webhook replies did not require an action-time controlled approval flag.
+- Updated `scripts/fundz_credit_tracker_bridge.py` so live outbound replies check `data/local/command-center/fundz-send-kill-switch.json` / env kill switches before sending.
+- Added `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true` as the explicit gate for non-test webhook replies; otherwise the webhook holds the reply instead of sending.
+- Added regression tests in `tests/test_fundz_autonomy.py`.
+- Verification passed: `python3 -m unittest tests.test_fundz_autonomy tests.test_fundz_highlevel_inbox_poller tests.test_fundz_autonomous_operator -q` ran 53 tests OK; `python3 -m py_compile scripts/fundz_credit_tracker_bridge.py scripts/fundz_highlevel_inbox_poller.py scripts/fundz_autonomous_operator.py scripts/fundz_autonomy_daemon.py` passed.
+- No live bridge, poller, tunnel, webhook wiring, client reply, lead/client send, DF/AutoFox edit, campaign assignment, billing edit, browser action, or Supabase write was performed.
+
+### Source Mapping / Proof Receipt Documentation
+
+- Inspected the current HighLevel/app-portal proof outputs, manual inbox workaround outputs, README/manual docs, HighLevel inbox poller, and inbox poller tests.
+- Confirmed the current manual/import proof path has a no-send receipt: Brandon Jordan's DF `All Messages` `App Message` row appears in `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` with `source=disputefox-admin-all-messages` and `proof_status=captured_from_manual_import_no_send`.
+- Tightened README and the ignored manual-import guide so browser screenshots graduate to repeatable API/manual/import proof only when the copied/exported row preserves message type, source/channel, identity/timeline fields, and writes the no-send proof receipt.
+- Verification: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` passed 30 tests on rerun.
+- No live API call, live poller, browser action, send, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, or Supabase write was performed.
+
+### Controlled Live Customer-Service Reply Gate
+
+- Added a deterministic controlled-live gate to `scripts/fundz_highlevel_inbox_poller.py`.
+- Live HighLevel replies now require dry-run off, `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true`, command-center kill switch off, business-hours window or explicit after-hours override, app/portal proof signal, no sensitive/proof-dependent classification labels, and reply receipt logging.
+- Webhook-driven live replies now require `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true` and check the command-center kill switch before outbound send.
+- Plain SMS is held even when live flags are on; the live path is limited to one approved, non-sensitive app/portal reply at a time.
+- Sensitive/proof-dependent labels still hold: billing, cancellation, complaint, document request, app access, score concern, and dispute update.
+- Updated README and the generated Command Center to show the Customer-Service Live Reply Gate clearly.
+- Added proof receipt `data/local/command-center/fundz-controlled-live-reply-gate-closeout-2026-05-13.md`.
+- Verification passed: `python3 -m unittest tests.test_fundz_highlevel_inbox_poller -q` ran 30 tests OK; `python3 -m unittest tests.test_fundz_command_center -q` ran 58 tests OK; focused combined gate tests ran 111 tests OK; `python3 -m py_compile scripts/fundz_highlevel_inbox_poller.py scripts/fundz_command_center.py scripts/fundz_credit_tracker_bridge.py scripts/fundz_autonomous_operator.py` passed; `make command-center` passed; `sh scripts/check-memory.sh` passed; `make test` ran 246 tests OK.
+- No live reply, live HighLevel poller, bridge, webhook, tunnel, DF/AutoFox edit, billing edit, campaign assignment, or client-send runtime was enabled.
+
+### Command Center Customer-Service Readiness Truth
+
+- Updated the generated A FUND Solution Command Center so customer-service readiness is visible near the top of `data/local/command-center/fundz-command-center.md`.
+- Added a structured `customer_service_readiness` section to `scripts/fundz_command_center.py` with three plain buckets: `Safe Now`, `Controlled-Live Eligible`, and `Broad Autonomous Replies Still Blocked`.
+- The generated report now states that safe work is local prep/proof capture/review only; controlled live is limited to one named owner-approved app/portal reply with exact channel/copy/receipt; broad autonomous third-party replies remain blocked.
+- The readiness block links the current proof surfaces: readiness packet, production routing proof, client-side app proof, manual/API app-portal proof JSONL, and Brandon owner-side roundtrip receipts.
+- Added focused command-center test assertions so the Markdown includes the readiness section and keeps the broad-autonomous-replies blocker visible.
+- Regenerated `make command-center`; the current generated report shows owner-side app/portal roundtrip proven, manual/API app-portal proof events present, and broad autonomous replies blocked.
+- Verification passed: `python3 -m unittest tests.test_fundz_command_center -q` ran 58 tests OK; `python3 -m py_compile scripts/fundz_command_center.py` passed; `make command-center` passed.
+- No live reply, client send, HighLevel live poller, DF/AutoFox edit, campaign assignment, billing edit, webhook wiring, browser action, or Supabase write was performed.
+
 ### Supervisor Live AutoFox Tip 04 Completion
 
 - Completed the controlled live DF/Pulse template setup for `Client (step 04) - Round 1 Sent & Campaign` (`autofox_id=160038`).

@@ -103,6 +103,8 @@ class FundzCommandCenterTests(unittest.TestCase):
         self.assertEqual(report["scorefusion"]["enrolled"], 2)
         self.assertIn("backlog_coverage", report)
         self.assertIn("no_approval_work_queue", report)
+        self.assertIn("customer_service_readiness", report)
+        self.assertIn("broad autonomous replies blocked", report["customer_service_readiness"]["state"])
 
     def test_pilot_status_report_reads_provider_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1464,6 +1466,20 @@ class FundzCommandCenterTests(unittest.TestCase):
                 "communication_control_board": [],
                 "governor_alerts": [],
                 "blockers": [],
+                "customer_service_readiness": {
+                    "state": "Owner-reviewed customer service only; broad autonomous replies blocked.",
+                    "safe_now": ["Local customer-service prep with no send."],
+                    "controlled_live_eligible": ["One named, owner-approved app/portal reply with receipt capture."],
+                    "broad_autonomous_blocked": ["No approval exists for broad autonomous third-party replies."],
+                    "proof": {
+                        "owner_roundtrip_proven": True,
+                        "manual_or_api_app_portal_events": 1,
+                        "readiness_packet": "data/local/command-center/fundz-customer-service-readiness-2026-05-13.md",
+                        "production_routing": "data/local/command-center/fundz-production-verification-2026-05-13.md",
+                        "manual_or_api_event_proof": "data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl",
+                        "owner_roundtrip_receipts": ["data/local/semi-autonomous/receipts/brandon-jordan-df-portal-reply-proof-20260513.md"],
+                    },
+                },
             }
 
             command_center.write_markdown(report, path)
@@ -1475,6 +1491,14 @@ class FundzCommandCenterTests(unittest.TestCase):
             self.assertIn("## Queue Truth", text)
             self.assertIn("Approved: 1 prepared-but-gated row(s)", text)
             self.assertIn("Done/Sent: 1 receipt-backed outcome(s)", text)
+            self.assertIn("## Customer-Service Readiness", text)
+            self.assertIn("Safe Now", text)
+            self.assertIn("Controlled-Live Eligible", text)
+            self.assertIn("Broad Autonomous Replies Still Blocked", text)
+            self.assertIn("broad autonomous replies blocked", text)
+            self.assertIn("## Customer-Service Live Reply Gate", text)
+            self.assertIn("Broad autonomous replies: blocked", text)
+            self.assertIn("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true", text)
 
     def test_daily_board_outputs_exactly_five_lines(self) -> None:
         report = {

@@ -378,7 +378,7 @@ make webhook-probe
 
 If Cloudflare or the Credit Tracker webhook is not stable, FUNDz can poll HighLevel conversations directly. This lets inbound client texts reach FUNDz without a public tunnel.
 
-FUNDz treats Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and HighLevel app/portal conversation rows as customer-service intake. Local intake can classify and remember those messages without sending a live reply. Live replies remain approval-gated and should not be enabled until the current app/portal route is reverified with a test-only webhook or a fresh HighLevel conversation snapshot.
+FUNDz treats Credit Tracker app, DisputeFox portal, AutoFox Mobile App SMS, and HighLevel app/portal conversation rows as customer-service intake. Local intake can classify and remember those messages without sending a live reply. Broad autonomous replies stay blocked; the live path is limited to one controlled, approved, non-sensitive app/portal reply at a time.
 
 Preview mode, no sends:
 
@@ -396,7 +396,14 @@ Live replies require all of these:
 
 - `CREDIT_TRACKER_DRY_RUN=false`
 - `FUNDZ_HIGHLEVEL_POLLER_LIVE=true`
+- `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true` for the action window
+- command-center kill switch off in `data/local/command-center/fundz-send-kill-switch.json`
+- business hours, or `FUNDZ_ALLOW_AFTER_HOURS_SENDS=true` for a specific approved exception
+- an inbound app/portal proof signal, such as `App Message`, `TYPE_APP_MESSAGE`, `Mobile App SMS`, Credit Tracker, DisputeFox portal, or equivalent source/channel proof
+- no sensitive/proof-dependent labels: billing, cancellation, complaint, document request, app access, score concern, or dispute update
 - a HighLevel token with conversation-read and message-send scopes
+
+Successful controlled live replies write `data/local/highlevel-inbox-poller/reply-receipts.jsonl`. If any gate fails, the poller logs a hold instead of sending.
 
 If the poller reports `The token is not authorized for this scope`, update the HighLevel Private Integration scopes to include conversation/message read access, then rerun the preview command.
 
@@ -416,11 +423,22 @@ App/portal proof receipts are also written locally when the poller or manual wor
 These files are proof-only. They do not send replies or edit HighLevel, DF, AutoFox, billing, or campaigns.
 For the cleanest manual app/portal proof, include export columns such as `lastMessageType`, `channel`, `source`, `contact_id`, `conversation_id`, `date`, and `last message`. Plain SMS rows are not treated as app/portal proof unless the channel/source, message type, or message text clearly identifies the Credit Tracker app, DisputeFox portal, App Message, or Mobile App SMS.
 
+Browser screenshots can prove a one-off app/portal event, but they graduate into the repeatable API/manual/import proof path only when the copied/exported row preserves enough source mapping for the receipt:
+
+- message type: `App Message`, `TYPE_APP_MESSAGE`, `Mobile App SMS`, or another explicit app/portal type
+- source/channel: `disputefox`, `credit-tracker`, `portal`, `mobile_app_sms`, `app_message`, or another clear app/portal source
+- identity/timeline: contact name plus `contact_id` or `conversation_id` when available, and the message date/time
+- receipt: `app-portal-event-proof.jsonl` includes `proof_status` such as `captured_from_manual_import_no_send` or `captured_from_highlevel_poll_no_send`
+
+If those source fields are missing, keep the browser receipt as browser-only proof and do not treat the row as reusable API/manual/import evidence.
+
 To diagnose a real webhook payload before enabling live sends:
 
 ```sh
 scripts/fundz_credit_tracker_diagnose.py /path/to/payload.json
 ```
+
+Webhook-driven live replies also require `FUNDZ_WEBHOOK_CONTROLLED_REPLY_APPROVED=true` for the specific action window, the Command Center kill switch off, dry-run off, and the normal webhook signature/dedupe/DND checks. Test-only probes do not need this flag and do not send.
 
 To resolve a client email or phone into the real HighLevel contact ID before a pilot:
 

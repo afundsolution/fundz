@@ -12,6 +12,7 @@ import re
 import sys
 import time
 import urllib.parse
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ APP_PORTAL_PROOF_MD = STATE_DIR / "app-portal-event-proof.md"
 MANUAL_IMPORT_DIR = ROOT / "data" / "local" / "highlevel-inbox-manual-imports"
 MANUAL_QUEUE_CSV = STATE_DIR / "manual-inbox-workaround.csv"
 MANUAL_QUEUE_MD = STATE_DIR / "manual-inbox-workaround.md"
+SEND_KILL_SWITCH_JSON = ROOT / "data" / "local" / "command-center" / "fundz-send-kill-switch.json"
 
 DEFAULT_CONVERSATIONS_URL = "https://services.leadconnectorhq.com/conversations/search"
 
@@ -108,6 +110,34 @@ def env_int(name: str, default: int) -> int:
         return int(os.getenv(name, str(default)))
     except ValueError:
         return default
+
+
+def read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def send_kill_switch_enabled(path: Path | None = None) -> tuple[bool, str]:
+    if env_bool("FUNDZ_SEND_KILL_SWITCH") or env_bool("FUNDZ_COMMAND_CENTER_KILL_SWITCH"):
+        return True, "environment kill switch is enabled"
+    state = read_json(path or SEND_KILL_SWITCH_JSON)
+    if not isinstance(state, dict):
+        return False, "kill switch file missing or unreadable; defaulting to approval gates"
+    enabled = str(state.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
+    return enabled, str(state.get("reason") or "command-center kill switch is on").strip()
+
+
+def send_window_status(now: datetime | None = None) -> tuple[bool, str]:
+    if env_bool("FUNDZ_ALLOW_AFTER_HOURS_SENDS", False):
+        return True, "after-hours override enabled"
+    now = now or datetime.now()
+    if now.weekday() >= 5:
+        return False, "weekend live replies are blocked by FUNDz safety policy"
+    if now.hour < 9 or now.hour >= 21:
+        return False, "live replies are allowed only from 9 AM to 9 PM local time"
+    return True, "inside approved live-reply window"
 
 
 def write_poll_log(kind: str, payload: dict[str, Any]) -> None:
@@ -432,6 +462,40 @@ def live_reply_hold_reason(classification: dict[str, Any]) -> str:
         return "owner review required for " + ", ".join(held or ["sensitive reply"])
     if held:
         return "verified customer-service context required for " + ", ".join(held)
+    return ""
+
+
+def reply_receipt_logging_ready(path: Path | None = None) -> tuple[bool, str]:
+    path = path or REPLY_RECEIPTS
+    parent = path.parent
+    if not parent.exists():
+        return False, f"reply receipt directory is missing: {parent}"
+    if not parent.is_dir():
+        return False, f"reply receipt parent is not a directory: {parent}"
+    if not os.access(parent, os.W_OK):
+        return False, f"reply receipt directory is not writable: {parent}"
+    return True, "reply receipt path ready"
+
+
+def controlled_live_reply_gate_reason(payload: dict[str, Any], classification: dict[str, Any]) -> str:
+    if env_bool("CREDIT_TRACKER_DRY_RUN", True):
+        return "CREDIT_TRACKER_DRY_RUN is true"
+    if not env_bool("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED", False):
+        return "controlled live reply approval flag is off"
+    kill_enabled, kill_reason = send_kill_switch_enabled()
+    if kill_enabled:
+        return "send kill switch is ON: " + kill_reason
+    window_ok, window_reason = send_window_status()
+    if not window_ok:
+        return window_reason
+    if not app_portal_signals(payload):
+        return "app/portal proof signal required before live customer-service reply"
+    hold_reason = live_reply_hold_reason(classification)
+    if hold_reason:
+        return hold_reason
+    receipt_ready, receipt_reason = reply_receipt_logging_ready()
+    if not receipt_ready:
+        return receipt_reason
     return ""
 
 
@@ -822,7 +886,7 @@ def handle_payload(payload: dict[str, Any], live: bool) -> dict[str, Any]:
         write_poll_log("reply_preview", {"message_id": message_id, "reply": reply, "classification": classification, "payload": payload})
         return {"handled": True, "sent": False, "preview": True, "reply": reply, "classification": classification}
 
-    hold_reason = live_reply_hold_reason(classification)
+    hold_reason = controlled_live_reply_gate_reason(payload, classification)
     if hold_reason:
         write_poll_log("reply_hold", {"message_id": message_id, "reason": hold_reason, "classification": classification, "payload": payload})
         mark_seen(message_id)
@@ -849,6 +913,8 @@ def poll_once(limit: int, status: str, live: bool) -> dict[str, Any]:
         raise SystemExit("Missing CREDIT_TRACKER_LOCATION_ID.")
     if live and env_bool("CREDIT_TRACKER_DRY_RUN", True):
         raise SystemExit("CREDIT_TRACKER_DRY_RUN is true; refusing live HighLevel poller replies.")
+    if live and not env_bool("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED", False):
+        raise SystemExit("FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED is not true; refusing live HighLevel poller replies.")
 
     status_code, payload, conversations = fetch_conversations(location_id, limit, status)
     if not 200 <= status_code < 300:

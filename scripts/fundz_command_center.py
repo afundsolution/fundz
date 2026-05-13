@@ -113,6 +113,19 @@ POLLER_LOG = ROOT / "logs" / "highlevel-inbox-poller.jsonl"
 HIGHLEVEL_REPLY_QUEUE_JSONL = ROOT / "data" / "local" / "highlevel-inbox-poller" / "classified-replies.jsonl"
 HIGHLEVEL_REPLY_RECEIPTS_JSONL = ROOT / "data" / "local" / "highlevel-inbox-poller" / "reply-receipts.jsonl"
 HIGHLEVEL_REPLY_DECISIONS_CSV = ROOT / "data" / "local" / "highlevel-inbox-poller" / "reply-decisions.csv"
+APP_PORTAL_EVENT_PROOF_JSONL = ROOT / "data" / "local" / "highlevel-inbox-poller" / "app-portal-event-proof.jsonl"
+CUSTOMER_SERVICE_READINESS_MD = OUTPUT_DIR / "fundz-customer-service-readiness-2026-05-13.md"
+CUSTOMER_SERVICE_PRODUCTION_PROOF_MD = OUTPUT_DIR / "fundz-production-verification-2026-05-13.md"
+APP_PORTAL_CLIENT_SIDE_PROOF_MD = OUTPUT_DIR / "fundz-app-portal-client-side-proof-2026-05-13.md"
+BRANDON_APP_INBOUND_PROOF_MD = (
+    ROOT / "data" / "local" / "semi-autonomous" / "receipts" / "brandon-jordan-df-all-messages-app-message-hey-proof-20260513.md"
+)
+BRANDON_PORTAL_REPLY_PROOF_MD = (
+    ROOT / "data" / "local" / "semi-autonomous" / "receipts" / "brandon-jordan-df-portal-reply-proof-20260513.md"
+)
+BRANDON_PORTAL_VISIBILITY_PROOF_MD = (
+    ROOT / "data" / "local" / "semi-autonomous" / "receipts" / "brandon-jordan-client-portal-reply-visibility-proof-20260513.md"
+)
 BRIDGE_LOG = ROOT / "logs" / "credit-tracker-bridge.jsonl"
 STATE_JSON = ROOT / "data" / "local" / "fundz-client-state.json"
 SUMMARY_CSV = ROOT / "data" / "local" / "fundz-client-state-summary.csv"
@@ -425,6 +438,47 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
             return list(csv.DictReader(handle))
     except OSError:
         return []
+
+
+def build_customer_service_readiness() -> dict[str, Any]:
+    owner_roundtrip_paths = [
+        BRANDON_APP_INBOUND_PROOF_MD,
+        BRANDON_PORTAL_REPLY_PROOF_MD,
+        BRANDON_PORTAL_VISIBILITY_PROOF_MD,
+    ]
+    owner_roundtrip_proven = all(path.exists() for path in owner_roundtrip_paths)
+    production_routing_proven = CUSTOMER_SERVICE_PRODUCTION_PROOF_MD.exists()
+    readiness_packet_exists = CUSTOMER_SERVICE_READINESS_MD.exists()
+    manual_or_api_proof_rows = read_jsonl(APP_PORTAL_EVENT_PROOF_JSONL, limit=5000)
+
+    return {
+        "state": "Owner-reviewed customer service only; broad autonomous replies blocked.",
+        "safe_now": [
+            "Local customer-service prep, inbox classification, memory summaries, and reply drafting with no send.",
+            "Manual/API app-portal proof capture in no-send mode.",
+            "Command Center, Work Queue, Send Visibility, and proof review surfaces.",
+        ],
+        "controlled_live_eligible": [
+            "One named, owner-approved app/portal support reply with exact channel, exact copy, and receipt capture.",
+            "Brandon owner-side portal roundtrip is proven; do not generalize it to third-party clients.",
+            "HighLevel live replies only after action-time approval and only when dry-run/live gates are deliberately set for that action.",
+        ],
+        "broad_autonomous_blocked": [
+            "No approval exists for broad autonomous third-party customer-service replies.",
+            "Proof-dependent app access, score, dispute, billing, cancel, complaint, and document replies must still hold for review.",
+            "The live bridge/poller/webhook client-response runtime remains parked unless Brandon approves the exact wake.",
+            "Future third-party app/portal events still need API/webhook/manual-import evidence and receipts before expansion.",
+        ],
+        "proof": {
+            "readiness_packet": relative_label(CUSTOMER_SERVICE_READINESS_MD) if readiness_packet_exists else "",
+            "production_routing": relative_label(CUSTOMER_SERVICE_PRODUCTION_PROOF_MD) if production_routing_proven else "",
+            "client_side_app_proof": relative_label(APP_PORTAL_CLIENT_SIDE_PROOF_MD) if APP_PORTAL_CLIENT_SIDE_PROOF_MD.exists() else "",
+            "owner_roundtrip_proven": owner_roundtrip_proven,
+            "owner_roundtrip_receipts": [relative_label(path) for path in owner_roundtrip_paths if path.exists()],
+            "manual_or_api_app_portal_events": len(manual_or_api_proof_rows),
+            "manual_or_api_event_proof": relative_label(APP_PORTAL_EVENT_PROOF_JSONL) if manual_or_api_proof_rows else "",
+        },
+    }
 
 
 def latest_receipt_file(pattern: str) -> Path | None:
@@ -2828,6 +2882,7 @@ def build_command_center(limit: int = 10) -> dict[str, Any]:
         "scorefusion": scorefusion_snapshot(),
         "receipts": receipt_summary(),
         "safety_gate": build_safety_gate_snapshot(),
+        "customer_service_readiness": build_customer_service_readiness(),
         "send_kill_switch": kill_switch,
         "send_ledger": send_ledger,
         "next_send_queue": next_send_queue,
@@ -4298,6 +4353,46 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Meaning: {safety.get('note', 'Client sends remain off; use this as local reporting only.')}",
         ]
     )
+    readiness = report.get("customer_service_readiness") if isinstance(report.get("customer_service_readiness"), dict) else {}
+    readiness_proof = readiness.get("proof") if isinstance(readiness.get("proof"), dict) else {}
+    lines.extend(
+        [
+            "",
+            "## Customer-Service Readiness",
+            f"- State: {readiness.get('state', 'Owner-reviewed only; broad autonomous replies blocked.')}",
+            f"- Owner-side app/portal roundtrip proven: {readiness_proof.get('owner_roundtrip_proven', False)}",
+            f"- Manual/API app-portal proof events: {readiness_proof.get('manual_or_api_app_portal_events', 0)}",
+            f"- Readiness packet: {readiness_proof.get('readiness_packet') or 'missing'}",
+            f"- Production routing proof: {readiness_proof.get('production_routing') or 'missing'}",
+            "",
+            "### Safe Now",
+        ]
+    )
+    for item in readiness.get("safe_now", []) or []:
+        lines.append(f"- {item}")
+    if not readiness.get("safe_now"):
+        lines.append("- Local reporting and review only.")
+    lines.append("")
+    lines.append("### Controlled-Live Eligible")
+    for item in readiness.get("controlled_live_eligible", []) or []:
+        lines.append(f"- {item}")
+    if not readiness.get("controlled_live_eligible"):
+        lines.append("- None without exact action-time approval.")
+    lines.append("")
+    lines.append("### Broad Autonomous Replies Still Blocked")
+    for item in readiness.get("broad_autonomous_blocked", []) or []:
+        lines.append(f"- {item}")
+    if not readiness.get("broad_autonomous_blocked"):
+        lines.append("- Broad autonomous replies stay blocked until separate proof and approval exist.")
+    owner_receipts = readiness_proof.get("owner_roundtrip_receipts") if isinstance(readiness_proof.get("owner_roundtrip_receipts"), list) else []
+    if owner_receipts or readiness_proof.get("manual_or_api_event_proof") or readiness_proof.get("client_side_app_proof"):
+        lines.extend(["", "### Customer-Service Proof Links"])
+        if readiness_proof.get("client_side_app_proof"):
+            lines.append(f"- Client-side app proof: {readiness_proof.get('client_side_app_proof')}")
+        if readiness_proof.get("manual_or_api_event_proof"):
+            lines.append(f"- Manual/API event proof: {readiness_proof.get('manual_or_api_event_proof')}")
+        for receipt in owner_receipts:
+            lines.append(f"- Owner roundtrip receipt: {receipt}")
     kill_switch = report.get("send_kill_switch") if isinstance(report.get("send_kill_switch"), dict) else {}
     next_queue = report.get("next_send_queue", [])
     lines.extend(
@@ -4312,6 +4407,17 @@ def write_markdown(report: dict[str, Any], path: Path = COMMAND_CENTER_MD) -> No
             f"- Owner text notice: {next_queue[0].get('owner_notice_status') if next_queue else 'not_applicable'}",
             f"- Owner view: {relative_label(SEND_VISIBILITY_MD)}",
             f"- Gate lock: {relative_label(SEND_GATE_LOCK_MD)}",
+        ]
+    )
+    lines.extend(
+        [
+            "",
+            "## Customer-Service Live Reply Gate",
+            "- Broad autonomous replies: blocked.",
+            "- Controlled live reply path: code-ready for one approved non-sensitive app/portal reply only.",
+            "- Required controls: `CREDIT_TRACKER_DRY_RUN=false`, `FUNDZ_HIGHLEVEL_CONTROLLED_REPLY_APPROVED=true`, kill switch off, business-hours window or explicit after-hours override, app/portal proof signal, no sensitive/proof-dependent labels, and reply receipt logging.",
+            "- Still held for owner review: billing, cancellation, complaints, document requests, app access, score concerns, and dispute updates.",
+            "- Proof path: `data/local/highlevel-inbox-poller/app-portal-event-proof.jsonl` before the live gate and `data/local/highlevel-inbox-poller/reply-receipts.jsonl` after a successful approved reply.",
         ]
     )
     maintenance = report.get("maintenance_cleanup_summary") if isinstance(report.get("maintenance_cleanup_summary"), dict) else {}
